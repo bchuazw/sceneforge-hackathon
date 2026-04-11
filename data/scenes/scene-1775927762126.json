@@ -1,0 +1,106 @@
+{
+  "id": "scene-1775927762126",
+  "createdAt": "2026-04-11T17:16:17.061Z",
+  "prompt": "A haunted house on a hill during a thunderstorm",
+  "sceneData": {
+    "scene_name": "Haunted House on a Hill",
+    "theme": "horror",
+    "mood": "creepy",
+    "time": "night",
+    "objects": [
+      {
+        "type": "building",
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "properties": {
+          "condition": "dilapidated",
+          "features": [
+            "broken windows",
+            "creaking doors"
+          ]
+        }
+      },
+      {
+        "type": "tree",
+        "position": [
+          5,
+          0,
+          -3
+        ],
+        "scale": 1.5,
+        "properties": {
+          "type": "oak",
+          "leaves": "sparse"
+        }
+      }
+    ],
+    "lighting": {
+      "type": "moonlight",
+      "intensity": 0.5,
+      "color": "#a9a9a9"
+    },
+    "audio_zones": [
+      {
+        "type": "ambient",
+        "sound": "howling wind and distant thunder",
+        "volume": 0.7
+      },
+      {
+        "type": "positional",
+        "sound": "creaking wood",
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "volume": 0.5
+      }
+    ],
+    "gameplay": {
+      "type": "exploration",
+      "camera": "first_person"
+    },
+    "raw_prompt": "A haunted house on a hill during a thunderstorm"
+  },
+  "audioFiles": [
+    {
+      "type": "music",
+      "name": "Background Music",
+      "url": "/generated/music-1775927770522.mp3",
+      "status": "generated"
+    },
+    {
+      "type": "sfx",
+      "name": "howling wind and distant thunder",
+      "url": "/generated/sfx-0-1775927770522.mp3",
+      "zone": {
+        "type": "ambient",
+        "sound": "howling wind and distant thunder",
+        "volume": 0.7
+      },
+      "status": "generated"
+    },
+    {
+      "type": "sfx",
+      "name": "creaking wood",
+      "url": "/generated/sfx-1-1775927770522.mp3",
+      "zone": {
+        "type": "positional",
+        "sound": "creaking wood",
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "volume": 0.5
+      },
+      "status": "generated"
+    }
+  ],
+  "skyboxUrl": "/generated/skybox-1775927777046.png",
+  "similarScenes": []
+}

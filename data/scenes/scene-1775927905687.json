@@ -1,0 +1,92 @@
+{
+  "id": "scene-1775927905687",
+  "createdAt": "2026-04-11T17:18:38.755Z",
+  "prompt": "A magical forest with floating crystals",
+  "sceneData": {
+    "scene_name": "Magical Forest",
+    "theme": "fantasy",
+    "mood": "mysterious",
+    "time": "day",
+    "objects": [
+      {
+        "type": "tree",
+        "position": [
+          10,
+          0,
+          10
+        ],
+        "scale": 1.5,
+        "properties": {
+          "species": "ancient",
+          "leaf_color": "green"
+        }
+      },
+      {
+        "type": "prop",
+        "position": [
+          5,
+          3,
+          5
+        ],
+        "scale": 0.5,
+        "properties": {
+          "type": "floating_crystal",
+          "color": "blue",
+          "glow": true
+        }
+      },
+      {
+        "type": "prop",
+        "position": [
+          15,
+          4,
+          15
+        ],
+        "scale": 0.5,
+        "properties": {
+          "type": "floating_crystal",
+          "color": "purple",
+          "glow": true
+        }
+      }
+    ],
+    "lighting": {
+      "type": "daylight",
+      "intensity": 0.8,
+      "color": "#aaffff"
+    },
+    "audio_zones": [
+      {
+        "type": "ambient",
+        "sound": "soft wind and distant birds",
+        "volume": 0.5
+      }
+    ],
+    "gameplay": {
+      "type": "exploration",
+      "camera": "third_person"
+    },
+    "raw_prompt": "A magical forest with floating crystals"
+  },
+  "audioFiles": [
+    {
+      "type": "music",
+      "name": "Background Music",
+      "url": "/api/files/music-1775927913800.mp3",
+      "status": "generated"
+    },
+    {
+      "type": "sfx",
+      "name": "soft wind and distant birds",
+      "url": "/api/files/sfx-0-1775927913800.mp3",
+      "zone": {
+        "type": "ambient",
+        "sound": "soft wind and distant birds",
+        "volume": 0.5
+      },
+      "status": "generated"
+    }
+  ],
+  "skyboxUrl": "/api/files/skybox-1775927918740.png",
+  "similarScenes": []
+}

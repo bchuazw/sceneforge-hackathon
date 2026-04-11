@@ -1,20 +1,55 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 
-// Scene: Generated Scene
-// Generated from: "A cyberpunk city with neon lights and rain"
+interface GameRendererProps {
+  sceneData: {
+    scene_name: string;
+    theme: string;
+    mood: string;
+    time: string;
+    objects: Array<{
+      type: string;
+      position: [number, number, number];
+      scale: number;
+      properties?: Record<string, any>;
+    }>;
+    lighting: {
+      type: string;
+      intensity: number;
+      color: string;
+    };
+    audio_zones?: Array<{
+      type: string;
+      sound: string;
+      position?: [number, number, number];
+      volume: number;
+    }>;
+    gameplay?: {
+      type: string;
+      camera: string;
+    };
+  };
+  audioFiles?: Array<{
+    type: string;
+    name: string;
+    url: string;
+  }>;
+  skyboxUrl?: string;
+}
 
-export default function GameScene() {
+export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameRendererProps) {
+  const musicFile = audioFiles?.find((a) => a.type === 'music');
+  
   return (
     <div className="w-full h-screen bg-black relative">
       <Canvas camera={{ position: [0, 5, 10], fov: 60 }}>
-        <color attach="background" args={['#ffffff']} />
+        <color attach="background" args={[sceneData.lighting?.color || '#1a1a2e']} />
         
         {/* Lighting */}
-        <ambientLight intensity={1} />
+        <ambientLight intensity={sceneData.lighting?.intensity || 0.5} />
         <directionalLight 
           position={[10, 10, 5]} 
           intensity={1}
@@ -28,35 +63,37 @@ export default function GameScene() {
         </mesh>
         
         {/* Scene Objects */}
-        
-        <mesh position={[0, 0, 0]} castShadow>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color="#2d5a27" />
-        </mesh>
-        <mesh position={[5, 0, 5]} castShadow>
-          <boxGeometry args={[0.5, 0.5, 0.5]} />
-          <meshStandardMaterial color="#808080" />
-        </mesh>
+        {sceneData.objects?.map((obj, i) => {
+          const color = obj.type === 'tree' ? '#2d5a27' : 
+                       obj.type === 'rock' ? '#808080' : 
+                       obj.type === 'building' ? '#8B4513' : 
+                       obj.type === 'vehicle' ? '#6366f1' :
+                       obj.type === 'character' ? '#f59e0b' : '#6366f1';
+          
+          return (
+            <mesh key={i} position={obj.position} castShadow>
+              <boxGeometry args={[obj.scale, obj.scale, obj.scale]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+          );
+        })}
         
         {/* Player */}
         <PlayerController />
-        
-        {/* Camera follows player */}
-        <CameraController />
       </Canvas>
       
       {/* HUD */}
       <div className="absolute top-4 left-4 text-white font-mono text-sm bg-black/50 p-3 rounded">
-        <div className="font-bold text-purple-400">Generated Scene</div>
-        <div className="text-slate-300">Theme: adventure</div>
-        <div className="text-slate-300">Mood: mysterious</div>
+        <div className="font-bold text-purple-400">{sceneData.scene_name}</div>
+        <div className="text-slate-300">Theme: {sceneData.theme}</div>
+        <div className="text-slate-300">Mood: {sceneData.mood}</div>
         <div className="mt-2 text-xs text-slate-400">
           WASD to move • Mouse to look
         </div>
       </div>
       
       {/* Audio */}
-      <audio src="/generated/music-1775919670155.mp3" autoPlay loop />
+      {musicFile && <audio src={musicFile.url} autoPlay loop />}
     </div>
   );
 }
@@ -64,11 +101,10 @@ export default function GameScene() {
 function PlayerController() {
   const meshRef = useRef<THREE.Mesh>(null);
   const [keys, setKeys] = useState<Set<string>>(new Set());
-  const velocity = useRef(new THREE.Vector3());
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      setKeys(prev => new Set(Array.from(prev).concat(e.key.toLowerCase())));
+      setKeys(prev => new Set([...Array.from(prev), e.key.toLowerCase()]));
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       setKeys(prev => {
@@ -108,9 +144,4 @@ function PlayerController() {
       <meshStandardMaterial color="#6366f1" />
     </mesh>
   );
-}
-
-function CameraController() {
-  // Simple camera that can be extended for mouse look
-  return null;
 }

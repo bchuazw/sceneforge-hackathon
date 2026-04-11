@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       
       return NextResponse.json({
         success: true,
-        audioUrl: `/generated/${filename}`,
+        audioUrl: `/api/files/${filename}`,
         type: audioType,
         description,
       });
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
             audioFiles.push({
               type: 'music',
               name: 'Background Music',
-              url: `/generated/${musicFilename}`,
+              url: `/api/files/${musicFilename}`,
               status: 'generated',
             });
           } else {
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
           audioFiles.push({
             type: 'music',
             name: 'Background Music',
-            url: `/generated/${musicFilename}`,
+            url: `/api/files/${musicFilename}`,
             status: 'placeholder',
           });
         }
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
         audioFiles.push({
           type: 'music',
           name: 'Background Music',
-          url: `/generated/${musicFilename}`,
+          url: `/api/files/${musicFilename}`,
           status: 'placeholder',
           note: 'Add ELEVENLABS_API_KEY for real music generation'
         });
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
               audioFiles.push({
                 type: 'sfx',
                 name: zone.sound || `Sound ${i + 1}`,
-                url: `/generated/${sfxFilename}`,
+                url: `/api/files/${sfxFilename}`,
                 zone: zone,
                 status: 'generated',
               });
@@ -182,7 +182,7 @@ export async function POST(req: Request) {
             audioFiles.push({
               type: 'sfx',
               name: zone.sound || `Sound ${i + 1}`,
-              url: `/generated/${sfxFilename}`,
+              url: `/api/files/${sfxFilename}`,
               zone: zone,
               status: 'placeholder',
             });
@@ -202,7 +202,7 @@ export async function POST(req: Request) {
           audioFiles.push({
             type: 'sfx',
             name: zone.sound || `Sound ${i + 1}`,
-            url: `/generated/${sfxFilename}`,
+            url: `/api/files/${sfxFilename}`,
             zone: zone,
             status: 'placeholder',
           });
