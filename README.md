@@ -4,25 +4,65 @@
 
 AI-powered game scene generator. Type a description, get a playable Three.js game with AI-generated audio and visuals.
 
+![SceneForge AI](https://sceneforge.onrender.com/og-image.png)
+
 ## 🎮 How It Works
 
 1. **Describe your scene** (e.g., "Dark forest at night with a creepy cabin")
 2. **AI parses** your description into structured scene data
 3. **turbopuffer searches** for similar scenes with proven audio profiles
-4. **ElevenLabs generates** background music and sound effects
+4. **ElevenLabs generates** background music, sound effects, and voice narration
 5. **Three.js renders** a playable game scene
-6. **Play instantly** in your browser
+6. **Play instantly** in your browser with WASD controls and interactive objects
+
+## ✨ New Features
+
+### 🔍 Enhanced turbopuffer Integration
+- **Vector search**: Every generated scene is saved to turbopuffer with embeddings
+- **Find similar scenes**: Discover related scenes based on vector similarity
+- **Smart recommendations**: Get scene suggestions based on your prompts
+
+### 🎙️ ElevenLabs Voice Narration
+- **AI voice narration**: Generated scenes include spoken descriptions
+- **Multiple voices**: Support for different voice profiles
+- **Audio mixing**: Background music + positional SFX + narration
+
+### 🖼️ Scene Gallery
+- **Browse all scenes**: Visual gallery showcasing all generated scenes
+- **Filter by theme**: Filter scenes by adventure, horror, scifi, fantasy, etc.
+- **Scene cards**: Thumbnails with metadata (theme, mood, object count)
+
+### 🚀 Social & Sharing
+- **Shareable links**: Each scene has a unique URL
+- **Open Graph tags**: Rich previews when sharing on social media
+- **Copy link**: Quick copy-to-clipboard for scene URLs
+- **Native share**: Mobile share sheet support
+
+### 🎨 Remix Feature
+- **Fork scenes**: "Remix this scene" button to create variations
+- **Edit prompts**: Start with an existing prompt and modify it
+- **Build community**: Iterate on popular scene ideas
+
+### 🎮 Improved Game Experience
+- **Day/night cycle**: Toggle between day and night modes
+- **Camera modes**: Follow camera and orbit camera
+- **Interactive objects**: Click objects to play sounds and animations
+- **Better controls**: WASD movement, mouse look, space to jump
+- **Progress indicator**: Step-by-step generation progress
 
 ## 🏗️ Architecture
 
 ```
 User Prompt → LLM Parser → turbopuffer Search → ElevenLabs Audio → Three.js Game
+                ↓                ↓                      ↓
+           Save Scene    Find Similar          Voice Narration
+           (Vector DB)    Scenes                + SFX + Music
 ```
 
 ### Tech Stack
 - **Frontend:** Next.js 14, React, TypeScript, Tailwind
 - **3D Engine:** Three.js, React Three Fiber
-- **Audio:** ElevenLabs Music API + Sound Effects API
+- **Audio:** ElevenLabs Music API + Sound Effects API + TTS API
 - **Vector Search:** turbopuffer
 - **LLM:** OpenAI GPT-4
 - **Images:** Replicate (Stable Diffusion)
@@ -32,10 +72,10 @@ User Prompt → LLM Parser → turbopuffer Search → ElevenLabs Audio → Three
 
 ### Prerequisites
 Get API keys from:
-- [ElevenLabs](https://elevenlabs.io)
-- [turbopuffer](https://turbopuffer.com)
-- [OpenAI](https://platform.openai.com)
-- [Replicate](https://replicate.com)
+- [ElevenLabs](https://elevenlabs.io) - Music, SFX, and TTS
+- [turbopuffer](https://turbopuffer.com) - Vector search
+- [OpenAI](https://platform.openai.com) - Scene parsing & embeddings
+- [Replicate](https://replicate.com) - Skybox generation
 
 ### Local Development
 ```bash
@@ -61,18 +101,31 @@ npm run dev
 ```
 app/
 ├── api/
-│   ├── parse-scene/      # LLM scene parsing
-│   ├── search-scenes/    # turbopuffer vector search
-│   ├── generate-audio/   # ElevenLabs audio generation
-│   ├── generate-image/   # Replicate skybox generation
-│   └── build-scene/      # Main orchestrator
-├── page.tsx              # Landing page
-├── layout.tsx            # Root layout
-└── globals.css           # Global styles
+│   ├── parse-scene/        # LLM scene parsing
+│   ├── search-scenes/      # turbopuffer vector search
+│   ├── generate-audio/     # ElevenLabs audio generation
+│   ├── generate-narration/ # ElevenLabs TTS
+│   ├── generate-skybox/    # Replicate skybox generation
+│   ├── build-scene/        # Main orchestrator
+│   ├── list-scenes/        # Gallery API
+│   ├── similar-scenes/     # Find similar scenes
+│   └── get-scene/          # Load single scene
+├── page.tsx                # Landing page with generator
+├── gallery/                # Scene gallery page
+├── play/[id]/              # Scene player page
+└── layout.tsx              # Root layout with OG tags
 
-components/               # Three.js game components
-lib/                      # API clients
-public/generated/         # Generated assets (audio, images)
+components/                 # Three.js game components
+├── GameRenderer.tsx        # Main game renderer with controls
+
+lib/                        # API clients
+├── turbopuffer.ts          # Vector search client
+├── openai.ts               # LLM & embeddings
+├── elevenlabs.ts           # Audio generation
+└── seed-turbopuffer.ts     # Initial data seeding
+
+data/scenes/                # Generated scene JSON files
+public/generated/           # Generated audio & images
 ```
 
 ## 🔑 Environment Variables
@@ -82,6 +135,7 @@ ELEVENLABS_API_KEY=your_key_here
 TURBOPUFFER_API_KEY=your_key_here
 OPENAI_API_KEY=your_key_here
 REPLICATE_API_TOKEN=your_token_here
+NEXT_PUBLIC_URL=https://your-domain.com
 ```
 
 ## 📝 API Routes
@@ -91,21 +145,31 @@ REPLICATE_API_TOKEN=your_token_here
 | `POST /api/parse-scene` | Parse natural language to scene JSON |
 | `POST /api/search-scenes` | Find similar scenes via turbopuffer |
 | `POST /api/generate-audio` | Generate music/SFX via ElevenLabs |
-| `POST /api/generate-image` | Generate skybox via Replicate |
+| `POST /api/generate-narration` | Generate voice narration via ElevenLabs TTS |
+| `POST /api/generate-skybox` | Generate skybox via Replicate |
 | `POST /api/build-scene` | Full pipeline orchestrator |
+| `GET /api/list-scenes` | List all generated scenes |
+| `GET /api/similar-scenes` | Find similar scenes for a given scene |
+| `GET /api/get-scene` | Load a single scene by ID |
 
-## 🎯 Hackathon Judging Criteria
+## 🎯 Example Prompts
 
-- ✅ Uses **ElevenLabs APIs** (Music + Sound Effects)
+Try these prompts to see SceneForge AI in action:
+
+- "A peaceful Japanese garden with cherry blossoms and a koi pond at sunset"
+- "Cyberpunk city street with neon signs, rain, and flying cars at night"
+- "Medieval castle courtyard with torches and knights preparing for battle"
+- "Alien planet with purple crystals, floating rocks, and two moons"
+- "Abandoned spaceship corridor with flickering lights and steam vents"
+
+## 🏆 Hackathon Judging Criteria
+
+- ✅ Uses **ElevenLabs APIs** (Music + Sound Effects + TTS)
 - ✅ Uses **turbopuffer** (vector search for scene similarity)
 - ✅ Creative combination of both services
 - ✅ Working demo with viral potential
-
-## 🏆 Prizes
-
-- **1st Place:** $9,182 + LEGO kit + 3 months ElevenLabs Scale
-- **2nd Place:** $4,756 + 2 months ElevenLabs Scale
-- **3rd Place:** $1,354 + 1 month ElevenLabs Scale
+- ✅ Shareable scenes with social features
+- ✅ Voice narration showcases ElevenLabs TTS
 
 ## 📅 Timeline
 

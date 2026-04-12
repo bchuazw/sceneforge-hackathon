@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { upsertScene } from '@/lib/turbopuffer';
+import { createEmbedding } from '@/lib/openai';
 
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
 
@@ -85,6 +87,24 @@ export async function POST(req: Request) {
       JSON.stringify(sceneRecord, null, 2)
     );
     console.log('Scene data saved:', `data/scenes/${sceneId}.json`);
+    
+    // Step 6: Save to turbopuffer for vector search
+    console.log('Step 6: Saving to turbopuffer...');
+    try {
+      const embedding = await createEmbedding(prompt);
+      await upsertScene(sceneId, embedding, {
+        prompt,
+        scene_name: sceneData.scene_name,
+        theme: sceneData.theme,
+        mood: sceneData.mood,
+        time: sceneData.time,
+        object_count: sceneData.objects?.length || 0,
+        created_at: new Date().toISOString(),
+      });
+      console.log('Scene saved to turbopuffer');
+    } catch (tpError) {
+      console.error('turbopuffer save error (non-fatal):', tpError);
+    }
     
     return NextResponse.json({
       success: true,
