@@ -220,6 +220,14 @@ export default function GalleryPage() {
                     >
                       📋
                     </button>
+                    <a
+                      href={`/api/export-scene?id=${scene.id}`}
+                      className="bg-green-700 hover:bg-green-600 text-white px-3 rounded-lg transition-all flex items-center"
+                      title="Download as standalone HTML"
+                      download
+                    >
+                      ⬇️
+                    </a>
                   </div>
                 </div>
               </div>

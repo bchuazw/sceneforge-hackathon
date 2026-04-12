@@ -184,6 +184,19 @@ export default function PlayScenePage() {
     }
   };
 
+  const exportScene = () => {
+    if (!scene) return;
+    
+    // Trigger download
+    const exportUrl = `/api/export-scene?id=${id}`;
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.download = `${scene.sceneData.scene_name.replace(/[^a-zA-Z0-9]/g, '_')}_${id}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) {
     return (
       <div className="w-full h-screen bg-black flex items-center justify-center text-white">
@@ -243,6 +256,13 @@ export default function PlayScenePage() {
               className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded transition-colors"
             >
               {showJson ? '📋 Hide JSON' : '📋 Show JSON'}
+            </button>
+            <button
+              onClick={exportScene}
+              className="text-xs bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded transition-colors"
+              title="Download as standalone HTML"
+            >
+              ⬇️ Export
             </button>
           </div>
           
