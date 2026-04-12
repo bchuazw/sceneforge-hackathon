@@ -1,0 +1,124 @@
+{
+  "id": "scene-1776008081959",
+  "createdAt": "2026-04-12T15:34:54.813Z",
+  "prompt": "A cyberpunk street market with neon vendors",
+  "sceneData": {
+    "scene_name": "Cyberpunk Street Market",
+    "theme": "scifi",
+    "mood": "exciting",
+    "time": "night",
+    "objects": [
+      {
+        "type": "building",
+        "position": [
+          10,
+          5,
+          0
+        ],
+        "scale": 1.5,
+        "properties": {
+          "material": "metal",
+          "style": "futuristic"
+        }
+      },
+      {
+        "type": "prop",
+        "position": [
+          12,
+          6,
+          0
+        ],
+        "scale": 1,
+        "properties": {
+          "type": "vendor_stall",
+          "neon_sign": true
+        }
+      },
+      {
+        "type": "character",
+        "position": [
+          11,
+          5,
+          0
+        ],
+        "scale": 1,
+        "properties": {
+          "role": "vendor",
+          "outfit": "cybernetic"
+        }
+      }
+    ],
+    "lighting": {
+      "type": "neon",
+      "intensity": 0.8,
+      "color": "#00ffcc"
+    },
+    "audio_zones": [
+      {
+        "type": "ambient",
+        "sound": "humming of machines and chatter",
+        "volume": 0.5
+      }
+    ],
+    "gameplay": {
+      "type": "exploration",
+      "camera": "third_person"
+    },
+    "raw_prompt": "A cyberpunk street market with neon vendors"
+  },
+  "audioFiles": [
+    {
+      "type": "music",
+      "name": "Background Music",
+      "url": "/api/files/music-1776008090049.mp3",
+      "status": "generated"
+    },
+    {
+      "type": "sfx",
+      "name": "humming of machines and chatter",
+      "url": "/api/files/sfx-0-1776008090049.mp3",
+      "zone": {
+        "type": "ambient",
+        "sound": "humming of machines and chatter",
+        "volume": 0.5
+      },
+      "status": "generated"
+    }
+  ],
+  "skyboxUrl": "/api/files/skybox-1776008094777.png",
+  "similarScenes": [
+    {
+      "id": "scene-1776007078309",
+      "score": 0.3081149,
+      "created_at": "2026-04-12T15:18:14.542Z",
+      "mood": "mysterious",
+      "object_count": 3,
+      "prompt": "A cyberpunk neon city street with flying cars and rain at night",
+      "scene_name": "Neon City Night",
+      "theme": "scifi",
+      "time": "night"
+    },
+    {
+      "id": "scene-1776006075018",
+      "score": 0.33612078,
+      "created_at": "2026-04-12T15:01:29.910Z",
+      "mood": "exciting",
+      "object_count": 3,
+      "prompt": "A neon cyberpunk city with flying cars, holographic billboards, and rain",
+      "scene_name": "Neon Cyberpunk City",
+      "theme": "scifi",
+      "time": "night"
+    },
+    {
+      "id": "scene-1776006146180",
+      "score": 0.5315497,
+      "created_at": "2026-04-12T15:02:44.615Z",
+      "mood": "mysterious",
+      "object_count": 6,
+      "prompt": "This is a very long prompt with many characters to test the system limits and see how it handles extensive descriptions that go beyond normal usage patterns and might contain detailed specifications about a cyberpunk city scene with flying cars and neon lights and rain and holographic billboards and many more details that make this a very long text indeed",
+      "scene_name": "Cyberpunk City",
+      "theme": "scifi",
+      "time": "night"
+    }
+  ]
+}
