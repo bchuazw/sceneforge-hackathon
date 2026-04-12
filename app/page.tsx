@@ -3,11 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
-interface GenerationStep {
-  name: string;
-  status: 'pending' | 'active' | 'completed' | 'error';
-}
-
 export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,36 +17,6 @@ export default function Home() {
   }, []);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
-  const [steps, setSteps] = useState<GenerationStep[]>([
-    { name: 'Parsing scene description', status: 'pending' },
-    { name: 'Searching similar scenes', status: 'pending' },
-    { name: 'Generating audio', status: 'pending' },
-    { name: 'Creating skybox', status: 'pending' },
-    { name: 'Finalizing scene', status: 'pending' },
-  ]);
-  const [currentStep, setCurrentStep] = useState(0);
-
-  const updateStep = (index: number, status: GenerationStep['status']) => {
-    setSteps(prev => {
-      const newSteps = [...prev];
-      newSteps[index] = { ...newSteps[index], status };
-      return newSteps;
-    });
-    if (status === 'active') {
-      setCurrentStep(index);
-    }
-  };
-
-  const resetSteps = () => {
-    setSteps([
-      { name: 'Parsing scene description', status: 'pending' },
-      { name: 'Searching similar scenes', status: 'pending' },
-      { name: 'Generating audio', status: 'pending' },
-      { name: 'Creating skybox', status: 'pending' },
-      { name: 'Finalizing scene', status: 'pending' },
-    ]);
-    setCurrentStep(0);
-  };
 
   const generateScene = async () => {
     if (!prompt.trim()) return;
@@ -59,12 +24,8 @@ export default function Home() {
     setLoading(true);
     setError('');
     setResult(null);
-    resetSteps();
     
     try {
-      // Simulate step progression for better UX
-      updateStep(0, 'active');
-      
       const res = await fetch('/api/build-scene', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,44 +35,14 @@ export default function Home() {
       const data = await res.json();
       
       if (data.success) {
-        // Mark all steps as completed
-        steps.forEach((_, i) => updateStep(i, 'completed'));
         setResult(data);
       } else {
-        updateStep(currentStep, 'error');
         setError(data.error || 'Failed to generate scene');
       }
     } catch (err) {
-      updateStep(currentStep, 'error');
       setError(String(err));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getStepIcon = (status: GenerationStep['status']) => {
-    switch (status) {
-      case 'completed':
-        return '✓';
-      case 'active':
-        return '●';
-      case 'error':
-        return '✗';
-      default:
-        return '○';
-    }
-  };
-
-  const getStepColor = (status: GenerationStep['status']) => {
-    switch (status) {
-      case 'completed':
-        return 'text-green-400';
-      case 'active':
-        return 'text-purple-400 animate-pulse';
-      case 'error':
-        return 'text-red-400';
-      default:
-        return 'text-slate-500';
     }
   };
 
@@ -166,34 +97,16 @@ export default function Home() {
           </button>
         </div>
         
-        {/* Loading Progress */}
+        {/* Loading State */}
         {loading && (
-          <div className="mt-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-            <h3 className="text-sm font-medium text-slate-300 mb-3">Generation Progress</h3>
-            <div className="space-y-2">
-              {steps.map((step, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <span className={`text-lg ${getStepColor(step.status)}`}>
-                    {getStepIcon(step.status)}
-                  </span>
-                  <span className={`text-sm ${
-                    step.status === 'active' ? 'text-white' : 
-                    step.status === 'completed' ? 'text-slate-300' : 
-                    step.status === 'error' ? 'text-red-300' :
-                    'text-slate-500'
-                  }`}>
-                    {step.name}
-                  </span>
-                  {step.status === 'active' && (
-                    <span className="ml-auto">
-                      <svg className="animate-spin h-4 w-4 text-purple-400" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    </span>
-                  )}
-                </div>
-              ))}
+          <div className="mt-4 bg-slate-800/50 rounded-xl p-6 border border-slate-700 text-center">
+            <div className="flex flex-col items-center gap-3">
+              <svg className="animate-spin h-8 w-8 text-purple-400" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p className="text-slate-300 animate-pulse">Generating your scene...</p>
+              <p className="text-xs text-slate-500">This may take 10-30 seconds</p>
             </div>
           </div>
         )}

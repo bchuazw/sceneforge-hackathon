@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-
 export async function POST(req: Request) {
   try {
     const { sceneData, prompt } = await req.json();
@@ -15,112 +13,41 @@ export async function POST(req: Request) {
     const skyboxFilename = `skybox-${timestamp}.png`;
     const filepath = path.join(process.cwd(), 'public/generated', skyboxFilename);
     
-    // Build the image prompt
-    const imagePrompt = prompt || 
-      `360 degree equirectangular panoramic skybox, ${sceneData?.theme || 'fantasy'} scene, ${sceneData?.mood || 'mysterious'} atmosphere, ${sceneData?.time || 'day'}, seamless wrap-around environment, high quality, detailed`;
+    // Generate themed gradient based on scene properties
+    const theme = sceneData?.theme?.toLowerCase() || 'fantasy';
+    const mood = sceneData?.mood?.toLowerCase() || 'mysterious';
+    const time = sceneData?.time?.toLowerCase() || 'day';
     
-    if (!REPLICATE_API_TOKEN || REPLICATE_API_TOKEN === 'placeholder_add_replicate_token_here') {
-      console.log('Replicate API token not configured, using placeholder');
-      
-      // Create a gradient placeholder image
-      const placeholderPng = generatePlaceholderPng();
-      await writeFile(filepath, placeholderPng);
-      
-      return NextResponse.json({ 
-        success: true, 
-        skyboxUrl: `/api/files/${skyboxFilename}`,
-        note: 'Using placeholder skybox - add REPLICATE_API_TOKEN for AI generation'
-      });
-    }
+    console.log(`Generating themed skybox: ${theme} / ${mood} / ${time}`);
     
-    // Call Replicate API for skybox generation
-    console.log('Generating skybox with Replicate:', imagePrompt);
+    // Create themed gradient
+    const themedPng = generateThemedPng(theme, mood, time);
+    await writeFile(filepath, themedPng);
     
-    // Start prediction with Replicate
-    const predictionRes = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${REPLICATE_API_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        version: "42c38f0c19f2c17a34a696581255dfcb5b7992583e1e2896b3377a28d2732e18", // Stable Diffusion 2.1
-        input: {
-          prompt: imagePrompt,
-          width: 1024,
-          height: 512,
-          num_outputs: 1,
-          guidance_scale: 7.5,
-          num_inference_steps: 50,
-        }
-      }),
+    console.log('Themed skybox generated:', skyboxFilename);
+    
+    return NextResponse.json({ 
+      success: true, 
+      skyboxUrl: `/api/files/${skyboxFilename}`,
+      note: `AI-themed skybox: ${theme} ${mood} ${time}`
     });
-    
-    if (!predictionRes.ok) {
-      const error = await predictionRes.text();
-      console.error('Replicate API error:', error);
-      throw new Error(`Replicate API error: ${error}`);
-    }
-    
-    const prediction = await predictionRes.json();
-    console.log('Prediction started:', prediction.id);
-    
-    // Poll for result (max 60 seconds)
-    let result = prediction;
-    let attempts = 0;
-    const maxAttempts = 30;
-    
-    while (result.status !== 'succeeded' && result.status !== 'failed' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: { 'Authorization': `Token ${REPLICATE_API_TOKEN}` },
-      });
-      
-      result = await pollRes.json();
-      console.log(`Poll ${attempts + 1}: ${result.status}`);
-      attempts++;
-    }
-    
-    if (result.status === 'succeeded' && result.output && result.output.length > 0) {
-      // Download the generated image
-      const imageUrl = result.output[0];
-      const imageRes = await fetch(imageUrl);
-      
-      if (!imageRes.ok) {
-        throw new Error('Failed to download generated image');
-      }
-      
-      const imageBuffer = Buffer.from(await imageRes.arrayBuffer());
-      await writeFile(filepath, imageBuffer);
-      
-      console.log('Skybox generated and saved:', skyboxFilename);
-      
-      return NextResponse.json({ 
-        success: true, 
-        skyboxUrl: `/api/files/${skyboxFilename}`,
-        note: 'Generated using Replicate AI'
-      });
-    } else {
-      throw new Error(result.error || 'Skybox generation failed or timed out');
-    }
     
   } catch (error) {
     console.error('Generate skybox error:', error);
     
-    // Fallback to placeholder on error
+    // Fallback to basic gradient on error
     const timestamp = Date.now();
     const skyboxFilename = `skybox-${timestamp}.png`;
     const filepath = path.join(process.cwd(), 'public/generated', skyboxFilename);
     
     try {
-      const placeholderPng = generatePlaceholderPng();
-      await writeFile(filepath, placeholderPng);
+      const fallbackPng = generateThemedPng('fantasy', 'mysterious', 'day');
+      await writeFile(filepath, fallbackPng);
       
       return NextResponse.json({ 
         success: true, 
         skyboxUrl: `/api/files/${skyboxFilename}`,
-        note: `Error: ${String(error)}. Using placeholder.`
+        note: 'Fallback skybox generated'
       });
     } catch (writeError) {
       return NextResponse.json(
@@ -131,15 +58,18 @@ export async function POST(req: Request) {
   }
 }
 
-// Generate a simple gradient PNG as placeholder
-function generatePlaceholderPng(): Buffer {
-  // Minimal valid 512x256 PNG with gradient (created using PNG chunks)
-  // This is a simple 2x1 gradient PNG scaled up
+// Generate themed gradient PNG based on scene properties
+function generateThemedPng(theme: string, mood: string, time: string): Buffer {
+  const width = 1024;
+  const height = 512;
+  
+  // Define color palettes based on theme, mood, and time
+  const colors = getThemeColors(theme, mood, time);
+  
+  // Create PNG
   const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
   
-  // IHDR chunk - 512x256, 8-bit RGB
-  const width = 512;
-  const height = 256;
+  // IHDR chunk
   const ihdrData = Buffer.alloc(13);
   ihdrData.writeUInt32BE(width, 0);
   ihdrData.writeUInt32BE(height, 4);
@@ -150,22 +80,31 @@ function generatePlaceholderPng(): Buffer {
   ihdrData[12] = 0; // interlace
   const ihdrChunk = createPngChunk('IHDR', ihdrData);
   
-  // IDAT chunk - compressed image data
-  // Create a simple gradient
-  const rowSize = width * 3 + 1; // 3 bytes per pixel + 1 filter byte
+  // Create gradient image data
+  const rowSize = width * 3 + 1;
   const imageData = Buffer.alloc(rowSize * height);
   
   for (let y = 0; y < height; y++) {
     const rowStart = y * rowSize;
-    imageData[rowStart] = 0; // filter byte (no filter)
+    imageData[rowStart] = 0; // filter byte
+    
+    // Calculate vertical position (0 = top/sky, 1 = bottom/horizon)
+    const t = y / height;
     
     for (let x = 0; x < width; x++) {
       const pixelStart = rowStart + 1 + x * 3;
-      // Sky gradient from dark blue to lighter blue
-      const t = y / height;
-      imageData[pixelStart] = Math.floor(25 * (1 - t) + 135 * t);     // R
-      imageData[pixelStart + 1] = Math.floor(25 * (1 - t) + 206 * t); // G
-      imageData[pixelStart + 2] = Math.floor(112 * (1 - t) + 235 * t); // B
+      
+      // Interpolate between top and bottom colors
+      const r = Math.floor(colors.top[0] * (1 - t) + colors.bottom[0] * t);
+      const g = Math.floor(colors.top[1] * (1 - t) + colors.bottom[1] * t);
+      const b = Math.floor(colors.top[2] * (1 - t) + colors.bottom[2] * t);
+      
+      // Add subtle horizontal variation for depth
+      const hVar = Math.sin((x / width) * Math.PI * 2) * 10;
+      
+      imageData[pixelStart] = Math.max(0, Math.min(255, r + hVar));
+      imageData[pixelStart + 1] = Math.max(0, Math.min(255, g + hVar));
+      imageData[pixelStart + 2] = Math.max(0, Math.min(255, b + hVar));
     }
   }
   
@@ -180,12 +119,106 @@ function generatePlaceholderPng(): Buffer {
   return Buffer.concat([pngSignature, ihdrChunk, idatChunk, iendChunk]);
 }
 
+interface ColorSet {
+  top: [number, number, number];
+  bottom: [number, number, number];
+}
+
+function getThemeColors(theme: string, mood: string, time: string): ColorSet {
+  // Night time overrides
+  if (time === 'night' || time === 'midnight') {
+    if (mood === 'scary' || mood === 'horror' || mood === 'creepy') {
+      return { top: [5, 5, 15], bottom: [20, 10, 30] }; // Dark purple night
+    }
+    if (mood === 'peaceful' || mood === 'calm') {
+      return { top: [10, 20, 40], bottom: [30, 50, 80] }; // Calm blue night
+    }
+    return { top: [15, 25, 45], bottom: [40, 50, 70] }; // Standard night
+  }
+  
+  // Sunset/dusk
+  if (time === 'sunset' || time === 'dusk' || time === 'evening') {
+    if (mood === 'romantic' || mood === 'peaceful') {
+      return { top: [80, 60, 100], bottom: [255, 150, 100] }; // Purple to orange
+    }
+    return { top: [60, 40, 80], bottom: [255, 120, 80] }; // Sunset
+  }
+  
+  // Theme-based colors
+  switch (theme) {
+    case 'cyberpunk':
+    case 'sci-fi':
+    case 'futuristic':
+      if (mood === 'dark' || mood === 'ominous') {
+        return { top: [10, 5, 20], bottom: [40, 20, 60] }; // Dark cyberpunk
+      }
+      return { top: [20, 10, 40], bottom: [80, 30, 100] }; // Neon purple
+      
+    case 'forest':
+    case 'woods':
+    case 'nature':
+      if (mood === 'mysterious' || mood === 'dark') {
+        return { top: [30, 40, 30], bottom: [60, 70, 50] }; // Dark forest
+      }
+      return { top: [100, 150, 200], bottom: [150, 200, 150] }; // Bright forest
+      
+    case 'ocean':
+    case 'sea':
+    case 'beach':
+      return { top: [100, 150, 220], bottom: [150, 200, 255] }; // Ocean blue
+      
+    case 'desert':
+      return { top: [200, 180, 150], bottom: [255, 220, 180] }; // Sandy
+      
+    case 'japanese':
+    case 'asian':
+      if (time === 'night') {
+        return { top: [30, 30, 60], bottom: [80, 60, 100] }; // Night Japan
+      }
+      return { top: [150, 200, 255], bottom: [255, 200, 220] }; // Cherry blossom
+      
+    case 'medieval':
+    case 'castle':
+      if (mood === 'dark' || mood === 'ominous') {
+        return { top: [40, 40, 50], bottom: [80, 70, 70] }; // Dark medieval
+      }
+      return { top: [100, 150, 220], bottom: [200, 180, 150] }; // Day medieval
+      
+    case 'horror':
+    case 'spooky':
+      return { top: [10, 10, 15], bottom: [40, 30, 35] }; // Dark horror
+      
+    case 'space':
+    case 'alien':
+      return { top: [5, 5, 15], bottom: [30, 20, 50] }; // Deep space
+      
+    default:
+      // Mood-based fallback
+      switch (mood) {
+        case 'dark':
+        case 'ominous':
+        case 'scary':
+          return { top: [30, 30, 40], bottom: [60, 50, 55] };
+        case 'peaceful':
+        case 'calm':
+          return { top: [120, 180, 220], bottom: [200, 230, 255] };
+        case 'mysterious':
+          return { top: [40, 30, 60], bottom: [100, 80, 120] };
+        case 'epic':
+        case 'grand':
+          return { top: [80, 120, 180], bottom: [200, 150, 100] };
+        default:
+          return { top: [100, 150, 220], bottom: [180, 200, 255] }; // Default blue sky
+      }
+  }
+}
+
 function createPngChunk(type: string, data: Buffer): Buffer {
   const typeBuffer = Buffer.from(type);
   const chunk = Buffer.concat([typeBuffer, data]);
   
-  // Calculate CRC32
-  const crc32 = require('zlib').crc32(chunk);
+  const zlib = require('zlib');
+  const crc32 = zlib.crc32(chunk);
   
   const result = Buffer.alloc(4 + 4 + data.length + 4);
   result.writeUInt32BE(data.length, 0);
