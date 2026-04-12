@@ -7,34 +7,54 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     
-    if (!id || !id.match(/^scene-\d+$/)) {
+    console.log('Export scene request received, id:', id);
+    
+    if (!id) {
+      console.log('Export scene error: No ID provided');
       return NextResponse.json(
-        { success: false, error: 'Invalid scene ID' },
+        { success: false, error: 'Scene ID is required. Use ?id=scene-<timestamp>' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate scene ID format: scene-<timestamp>
+    const sceneIdPattern = /^scene-\d+$/;
+    if (!sceneIdPattern.test(id)) {
+      console.log('Export scene error: Invalid ID format:', id);
+      return NextResponse.json(
+        { success: false, error: `Invalid scene ID format: "${id}". Expected format: scene-<timestamp> (e.g., scene-1744440932000)` },
         { status: 400 }
       );
     }
     
     const scenePath = path.join(process.cwd(), 'data/scenes', `${id}.json`);
+    console.log('Looking for scene file:', scenePath);
     
     let sceneData;
     try {
       const content = await readFile(scenePath, 'utf-8');
       sceneData = JSON.parse(content);
-    } catch {
+      console.log('Scene data loaded successfully');
+    } catch (readError) {
+      console.error('Scene file read error:', readError);
       return NextResponse.json(
-        { success: false, error: 'Scene not found' },
+        { success: false, error: `Scene not found: ${id}` },
         { status: 404 }
       );
     }
     
     // Generate standalone HTML
+    console.log('Generating standalone HTML...');
     const html = generateStandaloneHTML(sceneData);
     
     // Return as downloadable file
+    const filename = `${sceneData.sceneData?.scene_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'scene'}_${id}.html`;
+    console.log('Export complete, filename:', filename);
+    
     return new NextResponse(html, {
       headers: {
         'Content-Type': 'text/html',
-        'Content-Disposition': `attachment; filename="${sceneData.sceneData?.scene_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'scene'}_${id}.html"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
     

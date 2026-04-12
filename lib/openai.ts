@@ -1,9 +1,18 @@
 // OpenAI client for scene parsing and embeddings
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiInstance: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openaiInstance) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is required");
+    }
+    openaiInstance = new OpenAI({ apiKey });
+  }
+  return openaiInstance;
+}
 
 export async function parseSceneDescription(prompt: string): Promise<any> {
   const systemPrompt = `You are a game scene parser. Convert natural language descriptions into structured JSON.
@@ -44,6 +53,7 @@ Schema:
 }`;
 
   try {
+    const openai = getOpenAI();
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
@@ -68,8 +78,8 @@ Schema:
       ...parsed,
       raw_prompt: prompt,
     };
-  } catch (error) {
-    console.error("OpenAI parse error:", error);
+  } catch (error: any) {
+    console.error("OpenAI parse error:", error.message);
     // Fallback to basic structure
     return {
       scene_name: "Generated Scene",
@@ -89,10 +99,21 @@ Schema:
 }
 
 export async function createEmbedding(text: string): Promise<number[]> {
-  const response = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text,
-  });
-  
-  return response.data[0].embedding;
+  try {
+    const openai = getOpenAI();
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text,
+    });
+    
+    return response.data[0].embedding;
+  } catch (error: any) {
+    console.error("OpenAI embedding error:", error.message);
+    // Return zero vector as fallback (will not match anything in search)
+    if (error.message?.includes("OPENAI_API_KEY")) {
+      console.log("OPENAI_API_KEY not set, returning zero embedding");
+      return new Array(1536).fill(0);
+    }
+    throw error;
+  }
 }

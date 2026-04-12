@@ -1,63 +1,30 @@
-import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import { createPngChunk, getThemeColors } from '@/lib/png-utils';
+import { createPngChunk, getThemeColors } from './png-utils';
 import { deflateSync } from 'zlib';
 
-export async function POST(req: Request) {
-  try {
-    const { sceneData, prompt } = await req.json();
-    
-    // Ensure generated directory exists
-    await mkdir(path.join(process.cwd(), 'public/generated'), { recursive: true });
-    
-    const timestamp = Date.now();
-    const skyboxFilename = `skybox-${timestamp}.png`;
-    const filepath = path.join(process.cwd(), 'public/generated', skyboxFilename);
-    
-    // Generate themed gradient based on scene properties
-    const theme = sceneData?.theme?.toLowerCase() || 'fantasy';
-    const mood = sceneData?.mood?.toLowerCase() || 'mysterious';
-    const time = sceneData?.time?.toLowerCase() || 'day';
-    
-    console.log(`Generating themed skybox: ${theme} / ${mood} / ${time}`);
-    
-    // Create themed gradient
-    const themedPng = generateThemedPng(theme, mood, time);
-    await writeFile(filepath, themedPng);
-    
-    console.log('Themed skybox generated:', skyboxFilename);
-    
-    return NextResponse.json({ 
-      success: true, 
-      skyboxUrl: `/api/files/${skyboxFilename}`,
-      note: `AI-themed skybox: ${theme} ${mood} ${time}`
-    });
-    
-  } catch (error) {
-    console.error('Generate skybox error:', error);
-    
-    // Fallback to basic gradient on error
-    const timestamp = Date.now();
-    const skyboxFilename = `skybox-${timestamp}.png`;
-    const filepath = path.join(process.cwd(), 'public/generated', skyboxFilename);
-    
-    try {
-      const fallbackPng = generateThemedPng('fantasy', 'mysterious', 'day');
-      await writeFile(filepath, fallbackPng);
-      
-      return NextResponse.json({ 
-        success: true, 
-        skyboxUrl: `/api/files/${skyboxFilename}`,
-        note: 'Fallback skybox generated'
-      });
-    } catch (writeError) {
-      return NextResponse.json(
-        { success: false, error: String(error) },
-        { status: 500 }
-      );
-    }
-  }
+export async function generateSkyboxForScene(sceneData: any): Promise<string> {
+  // Ensure generated directory exists
+  await mkdir(path.join(process.cwd(), 'public/generated'), { recursive: true });
+  
+  const timestamp = Date.now();
+  const skyboxFilename = `skybox-${timestamp}.png`;
+  const filepath = path.join(process.cwd(), 'public/generated', skyboxFilename);
+  
+  // Generate themed gradient based on scene properties
+  const theme = sceneData?.theme?.toLowerCase() || 'fantasy';
+  const mood = sceneData?.mood?.toLowerCase() || 'mysterious';
+  const time = sceneData?.time?.toLowerCase() || 'day';
+  
+  console.log(`Generating themed skybox: ${theme} / ${mood} / ${time}`);
+  
+  // Create themed gradient
+  const themedPng = generateThemedPng(theme, mood, time);
+  await writeFile(filepath, themedPng);
+  
+  console.log('Themed skybox generated:', skyboxFilename);
+  
+  return `/api/files/${skyboxFilename}`;
 }
 
 // Generate themed gradient PNG based on scene properties

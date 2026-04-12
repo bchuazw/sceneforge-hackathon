@@ -1,19 +1,24 @@
 // turbopuffer client - FULL IMPLEMENTATION
 import { Turbopuffer } from "@turbopuffer/turbopuffer";
 
-if (!process.env.TURBOPUFFER_API_KEY) {
-  throw new Error("TURBOPUFFER_API_KEY is required");
-}
+let tpufInstance: Turbopuffer | null = null;
 
-export const tpuf = new Turbopuffer({
-  apiKey: process.env.TURBOPUFFER_API_KEY,
-});
+function getTpuf(): Turbopuffer {
+  if (!tpufInstance) {
+    const apiKey = process.env.TURBOPUFFER_API_KEY;
+    if (!apiKey) {
+      throw new Error("TURBOPUFFER_API_KEY is required");
+    }
+    tpufInstance = new Turbopuffer({ apiKey });
+  }
+  return tpufInstance;
+}
 
 export const SCENE_INDEX = "game-scenes";
 
 // Get namespace for scenes
 function getNamespace() {
-  return tpuf.namespace(SCENE_INDEX);
+  return getTpuf().namespace(SCENE_INDEX);
 }
 
 // Search similar scenes using turbopuffer
@@ -37,8 +42,8 @@ export async function searchSimilarScenes(
     }));
   } catch (error: any) {
     console.error("turbopuffer search error:", error.message);
-    // Return empty array if index doesn't exist yet
-    if (error.message?.includes("not found")) {
+    // Return empty array if index doesn't exist yet or API key is missing
+    if (error.message?.includes("not found") || error.message?.includes("TURBOPUFFER_API_KEY")) {
       return [];
     }
     throw error;
@@ -64,6 +69,11 @@ export async function upsertScene(
     return true;
   } catch (error: any) {
     console.error("turbopuffer upsert error:", error.message);
+    // Silently fail if API key is missing
+    if (error.message?.includes("TURBOPUFFER_API_KEY")) {
+      console.log("TURBOPUFFER_API_KEY not set, skipping vector storage");
+      return false;
+    }
     return false;
   }
 }
@@ -75,7 +85,7 @@ export async function checkNamespace() {
     const count = await ns.approxNumVectors({});
     return { exists: true, count };
   } catch (error: any) {
-    if (error.message?.includes("not found")) {
+    if (error.message?.includes("not found") || error.message?.includes("TURBOPUFFER_API_KEY")) {
       return { exists: false, count: 0 };
     }
     throw error;

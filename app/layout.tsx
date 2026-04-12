@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 
+// Use production URL as default, fallback to localhost for dev
+const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://sceneforge-hackathon.onrender.com';
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'),
+  metadataBase: new URL(BASE_URL),
   title: 'SceneForge AI - ElevenLabs × turbopuffer Hackathon',
   description: 'AI-powered game scene generator. Type a description, get a playable Three.js game with AI-generated audio and visuals.',
   keywords: ['AI', 'game', 'generator', 'ElevenLabs', 'turbopuffer', 'Three.js', 'hackathon'],
@@ -10,9 +13,10 @@ export const metadata: Metadata = {
     title: 'SceneForge AI - ElevenLabs × turbopuffer Hackathon',
     description: 'AI-powered game scene generator. Type a description, get a playable Three.js game with AI-generated audio and visuals.',
     type: 'website',
+    url: BASE_URL,
     images: [
       {
-        url: '/og-image.png',
+        url: `${BASE_URL}/og-image.png`,
         width: 1200,
         height: 630,
         alt: 'SceneForge AI',
@@ -23,7 +27,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'SceneForge AI - ElevenLabs × turbopuffer Hackathon',
     description: 'AI-powered game scene generator. Type a description, get a playable Three.js game with AI-generated audio and visuals.',
-    images: ['/og-image.png'],
+    images: [`${BASE_URL}/og-image.png`],
   },
 };
 
