@@ -97,22 +97,30 @@ export async function POST(req: Request) {
       throw new Error(`Failed to save scene data: ${writeError}`);
     }
     
-    // Step 6: Save to turbopuffer for vector search
+    // Step 6: Save to turbopuffer for vector search (CRITICAL - this is the persistent store)
     console.log('Step 6: Saving to turbopuffer...');
+    let tpSaved = false;
     try {
       const embedding = await createEmbedding(prompt);
-      await upsertScene(sceneId, embedding, {
+      const tpAttributes = {
         prompt,
-        scene_name: sceneData.scene_name,
-        theme: sceneData.theme,
-        mood: sceneData.mood,
-        time: sceneData.time,
+        scene_name: sceneData.scene_name || 'Untitled Scene',
+        theme: sceneData.theme || 'unknown',
+        mood: sceneData.mood || 'neutral',
+        time: sceneData.time || 'day',
         object_count: sceneData.objects?.length || 0,
         created_at: new Date().toISOString(),
-      });
-      console.log('Scene saved to turbopuffer');
-    } catch (tpError) {
-      console.error('turbopuffer save error (non-fatal):', tpError);
+      };
+      console.log('Upserting to turbopuffer with attributes:', tpAttributes);
+      tpSaved = await upsertScene(sceneId, embedding, tpAttributes);
+      if (tpSaved) {
+        console.log('Scene saved to turbopuffer successfully');
+      } else {
+        console.error('turbopuffer upsert returned false - scene may not be persisted!');
+      }
+    } catch (tpError: any) {
+      console.error('turbopuffer save error (CRITICAL):', tpError.message || tpError);
+      tpSaved = false;
     }
     
     return NextResponse.json({
@@ -120,6 +128,7 @@ export async function POST(req: Request) {
       sceneId,
       url: `/play/${sceneId}`,
       sceneData,
+      persisted: tpSaved,
       generated: {
         audioFiles: audioFiles?.length || 0,
         similarScenesFound: similarScenes?.length || 0,

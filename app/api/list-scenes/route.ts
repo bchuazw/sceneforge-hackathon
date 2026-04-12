@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
+import { listAllScenes } from '@/lib/turbopuffer';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 
-export async function GET(req: Request) {
+// Fallback: read scenes from local filesystem
+async function listScenesFromFilesystem(): Promise<any[]> {
   try {
     const scenesDir = path.join(process.cwd(), 'data/scenes');
-    
-    // Check if directory exists
-    try {
-      await readdir(scenesDir);
-    } catch {
-      return NextResponse.json({ success: true, scenes: [] });
-    }
-    
     const files = await readdir(scenesDir);
     const jsonFiles = files.filter(f => f.endsWith('.json'));
     
@@ -27,34 +21,94 @@ export async function GET(req: Request) {
             prompt: data.prompt,
             sceneName: data.sceneData?.scene_name || 'Untitled Scene',
             theme: data.sceneData?.theme || 'unknown',
-            mood: data.sceneData?.mood || 'unknown',
+            mood: data.sceneData?.mood || 'neutral',
             time: data.sceneData?.time || 'day',
             objectCount: data.sceneData?.objects?.length || 0,
             hasSkybox: !!data.skyboxUrl,
             audioCount: data.audioFiles?.length || 0,
             url: `/play/${data.id}`,
           };
-        } catch {
+        } catch (e) {
+          console.error(`Error reading scene file ${file}:`, e);
           return null;
         }
       })
     );
     
-    // Filter out nulls and sort by date (newest first)
-    const validScenes = scenes
-      .filter((s): s is NonNullable<typeof s> => s !== null)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return scenes.filter(Boolean);
+  } catch (error) {
+    console.error('Filesystem list error:', error);
+    return [];
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    console.log('Listing scenes...');
+    
+    // Try turbopuffer first
+    let tpScenes: any[] = [];
+    let tpError = null;
+    try {
+      tpScenes = await listAllScenes(100);
+      console.log(`Found ${tpScenes.length} scenes in turbopuffer`);
+    } catch (error: any) {
+      console.error('Turbopuffer list error:', error.message);
+      tpError = error.message;
+    }
+    
+    // Always also get from filesystem (fallback + for when turbopuffer fails)
+    const fsScenes = await listScenesFromFilesystem();
+    console.log(`Found ${fsScenes.length} scenes in filesystem`);
+    
+    // Merge scenes, prioritizing filesystem data (most accurate)
+    const sceneMap = new Map();
+    
+    // Add turbopuffer scenes first
+    for (const scene of tpScenes) {
+      sceneMap.set(scene.id, {
+        id: scene.id,
+        createdAt: scene.created_at || scene.createdAt,
+        prompt: scene.prompt,
+        sceneName: scene.scene_name || 'Untitled Scene',
+        theme: scene.theme || 'unknown',
+        mood: scene.mood || 'unknown',
+        time: scene.time || 'day',
+        objectCount: scene.object_count || 0,
+        hasSkybox: false,
+        audioCount: 0,
+        url: `/play/${scene.id}`,
+      });
+    }
+    
+    // Override with filesystem data (more complete)
+    for (const scene of fsScenes) {
+      sceneMap.set(scene.id, scene);
+    }
+    
+    const allScenes = Array.from(sceneMap.values());
+    
+    // Sort by date (newest first)
+    const sortedScenes = allScenes.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     
     return NextResponse.json({ 
       success: true, 
-      scenes: validScenes,
-      count: validScenes.length,
+      scenes: sortedScenes,
+      count: sortedScenes.length,
+      sources: {
+        turbopuffer: tpScenes.length,
+        filesystem: fsScenes.length,
+        merged: allScenes.length,
+      },
+      tpError: tpError || undefined,
     });
     
   } catch (error) {
     console.error('List scenes error:', error);
     return NextResponse.json(
-      { success: false, error: String(error) },
+      { success: false, error: String(error), scenes: [] },
       { status: 500 }
     );
   }
