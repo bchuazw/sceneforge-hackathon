@@ -21,6 +21,7 @@ interface SceneData {
   id: string;
   prompt: string;
   createdAt: string;
+  narrationUrl?: string;
   sceneData: {
     scene_name: string;
     theme: string;
@@ -90,6 +91,10 @@ export default function PlayScenePage() {
       
       if (data.success) {
         setScene(data);
+        // Use pre-generated narration if available
+        if (data.narrationUrl) {
+          setNarrationUrl(data.narrationUrl);
+        }
         // Fetch similar scenes
         fetchSimilarScenes(id);
       } else {

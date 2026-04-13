@@ -15,53 +15,56 @@ function getOpenAI(): OpenAI {
 }
 
 export async function parseSceneDescription(prompt: string): Promise<any> {
-  const systemPrompt = `You are a game scene parser. Convert natural language descriptions into structured JSON.
+  const systemPrompt = `You are a senior game-scene director. Convert a short natural-language description into a richly detailed, playable 3D scene.
 
-Return valid JSON only, no markdown, no explanations.
+Return VALID JSON only, no markdown, no explanations.
+
+Design principles — take decisive creative liberty:
+- Populate richly. A "forest" should have 8-15 trees at varied positions, not 2. A "city street" should have multiple buildings, lamps, vehicles, debris. Err on the side of MORE detail, not less.
+- Spread objects across the XZ plane in natural clusters (positions roughly in the range [-30, 30] for X and Z; Y is ground level 0 unless floating).
+- Vary scales (0.5 – 3.0) so the scene looks organic, not gridded.
+- Add "procedural_layers": at least 3 distinct passes that describe how a renderer should layer detail (e.g. ground texture, weather particles, ambient fog, distant silhouettes, foreground props). Be opinionated — if a muddy road would look better with 8 procedural layers, say so.
+- Audio zones should feel placed: 1 ambient bed + 2-4 positional SFX that match visible objects.
+- Narration: write a 2-3 sentence cinematic description of the scene in second person ("You find yourself...") that a TTS engine will speak when the scene loads.
 
 Schema:
 {
-  "scene_name": "string",
+  "scene_name": "string (short, evocative title)",
   "theme": "adventure|horror|racing|scifi|fantasy|nature",
   "mood": "exciting|creepy|peaceful|mysterious|epic",
   "time": "day|night|sunset|dawn",
+  "narration": "string (2-3 sentence cinematic intro, second person)",
   "objects": [
-    {
-      "type": "tree|rock|building|vehicle|character|prop",
-      "position": [x, y, z],
-      "scale": number,
-      "properties": {}
-    }
+    { "type": "tree|rock|building|vehicle|character|prop|light", "position": [x, y, z], "scale": number, "properties": {} }
+  ],
+  "procedural_layers": [
+    { "name": "string", "description": "string (what this layer adds and why it improves the scene)" }
   ],
   "lighting": {
     "type": "daylight|moonlight|neon|fire|ambient",
     "intensity": 0.0-1.0,
-    "color": "#hexcolor"
+    "color": "#hexcolor",
+    "fog_color": "#hexcolor",
+    "fog_density": 0.0-0.1
   },
   "audio_zones": [
-    {
-      "type": "ambient|positional|player",
-      "sound": "description",
-      "position": [x, y, z] (for positional),
-      "volume": 0.0-1.0
-    }
+    { "type": "ambient|positional|player", "sound": "description for ElevenLabs SFX", "position": [x, y, z], "volume": 0.0-1.0 }
   ],
-  "gameplay": {
-    "type": "exploration|racing|puzzle|horror",
-    "camera": "first_person|third_person|chase"
-  }
+  "music_direction": "string (compositional brief for ElevenLabs Music API — instrumentation, tempo, key, dynamics)",
+  "gameplay": { "type": "exploration|racing|puzzle|horror", "camera": "first_person|third_person|chase" }
 }`;
 
   try {
     const openai = getOpenAI();
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.7,
-      max_tokens: 2000,
+      temperature: 0.8,
+      max_tokens: 3000,
+      response_format: { type: 'json_object' },
     });
 
     const content = response.choices[0]?.message?.content || '';

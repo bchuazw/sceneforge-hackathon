@@ -48,7 +48,7 @@
 - **Visual:** Montage of different scenes
 - **Text:** "Built with ❤️ for the ElevenLabs Hackathon"
 - **Voiceover:** "SceneForge AI - where imagination becomes playable reality."
-- **CTA:** "Try it now at sceneforge.onrender.com"
+- **CTA:** "Try it now at sceneforge-hackathon.onrender.com"
 
 ---
 

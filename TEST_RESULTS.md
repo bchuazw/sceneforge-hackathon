@@ -44,10 +44,12 @@ Prompt: "A racing track with fast cars and cheering crowds"
 
 | Service | Current | With Real Keys | Priority |
 |---------|---------|----------------|----------|
-| **LLM Parsing** | Fallback (mock data) | OpenAI GPT-4 for rich scene JSON | HIGH |
-| **Vector Search** | Empty results | Full turbopuffer search | MEDIUM |
-| **Audio** | Placeholder files | ElevenLabs Music + SFX | **HACKATHON REQUIRED** |
-| **Images** | Placeholder JPG | Replicate Stable Diffusion | LOW |
+| **LLM Parsing** | ✅ GPT-4o scene director (procedural layers, music brief, narration) | — | DONE |
+| **Vector Search** | ✅ turbopuffer live (12+ scenes, similarity search working) | — | DONE |
+| **Music** | ✅ ElevenLabs `/v1/music` composed soundtracks | — | DONE |
+| **SFX** | ✅ ElevenLabs `/v1/sound-generation` per audio zone | — | DONE |
+| **Narration** | ✅ ElevenLabs TTS wired into build pipeline | — | DONE |
+| **Images** | ✅ Replicate SDXL skyboxes | — | DONE |
 
 ### API Key Issues Found
 

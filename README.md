@@ -4,7 +4,9 @@
 
 AI-powered game scene generator. Type a description, get a playable Three.js game with AI-generated audio and visuals.
 
-![SceneForge AI](https://sceneforge.onrender.com/og-image.png)
+![SceneForge AI](https://sceneforge-hackathon.onrender.com/og-image.png)
+
+**🔗 Live demo:** https://sceneforge-hackathon.onrender.com
 
 ## 🎮 How It Works
 
@@ -22,10 +24,18 @@ AI-powered game scene generator. Type a description, get a playable Three.js gam
 - **Find similar scenes**: Discover related scenes based on vector similarity
 - **Smart recommendations**: Get scene suggestions based on your prompts
 
+### 🎵 Real ElevenLabs Music API
+- **Composed soundtracks**: Uses ElevenLabs `/v1/music` to compose a 30s track per scene (not just ambient SFX)
+- **Compositional briefs**: GPT-4o writes a musical direction (instrumentation, tempo, key, dynamics) for each scene before the Music API is called
+- **Graceful fallback**: Falls back to sound-generation if the Music API is unavailable
+
 ### 🎙️ ElevenLabs Voice Narration
-- **AI voice narration**: Generated scenes include spoken descriptions
-- **Multiple voices**: Support for different voice profiles
+- **Cinematic narration**: GPT-4o writes a 2-3 sentence second-person intro for each scene; ElevenLabs TTS voices it automatically as part of the build pipeline
 - **Audio mixing**: Background music + positional SFX + narration
+
+### 🧱 Procedural Scene Direction
+- **GPT-4o as scene director**: Parses a short prompt into 8-15 objects across natural clusters, plus named procedural layers (ground texture, weather, fog, silhouettes, foreground props)
+- **Decisive model calls**: The model is instructed to err on the side of MORE detail and to justify each procedural layer, not settle for a thin scene
 
 ### 🖼️ Scene Gallery
 - **Browse all scenes**: Visual gallery showcasing all generated scenes

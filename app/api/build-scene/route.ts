@@ -67,6 +67,42 @@ export async function POST(req: Request) {
       // Continue without skybox
       skyboxUrl = null;
     }
+
+    // Step 4b: Generate narration via ElevenLabs TTS (if the parser produced one)
+    let narrationUrl: string | null = null;
+    if (sceneData?.narration && process.env.ELEVENLABS_API_KEY) {
+      console.log('Step 4b: Generating narration...');
+      try {
+        const { writeFile: wf } = await import('fs/promises');
+        const narrFilename = `narration-${sceneId}.mp3`;
+        const narrPath = path.join(process.cwd(), 'public/generated', narrFilename);
+        const ttsResp = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'xi-api-key': process.env.ELEVENLABS_API_KEY,
+            },
+            body: JSON.stringify({
+              text: sceneData.narration,
+              model_id: 'eleven_multilingual_v2',
+              voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+            }),
+          }
+        );
+        if (ttsResp.ok) {
+          const buf = Buffer.from(await ttsResp.arrayBuffer());
+          await wf(narrPath, buf);
+          narrationUrl = `/api/files/${narrFilename}`;
+          console.log('Narration generated:', narrationUrl);
+        } else {
+          console.error('Narration TTS error:', await ttsResp.text());
+        }
+      } catch (narrErr) {
+        console.error('Narration generation error (non-fatal):', narrErr);
+      }
+    }
     
     // Step 5: Save scene data as JSON
     console.log('Step 5: Saving scene data...');
@@ -83,6 +119,7 @@ export async function POST(req: Request) {
       sceneData,
       audioFiles: audioFiles || [],
       skyboxUrl,
+      narrationUrl,
       similarScenes: similarScenes || [],
     };
     
@@ -133,6 +170,7 @@ export async function POST(req: Request) {
         audioFiles: audioFiles?.length || 0,
         similarScenesFound: similarScenes?.length || 0,
         skybox: !!skyboxUrl,
+        narration: !!narrationUrl,
       }
     });
     
