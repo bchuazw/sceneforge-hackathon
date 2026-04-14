@@ -87,9 +87,27 @@ export async function GET(req: Request) {
     }
     
     const allScenes = Array.from(sceneMap.values());
-    
+
+    // Filter out test/junk scenes that shouldn't appear in the public gallery
+    const JUNK_PATTERNS = [
+      /^test$/i,
+      /^test\s/i,
+      /test.*persistence/i,
+      /special char/i,
+      /^this is a very long prompt/i,
+    ];
+    const cleanScenes = allScenes.filter(scene => {
+      const name = scene.sceneName || '';
+      const prompt = scene.prompt || '';
+      // Drop scenes with 0 objects AND no audio (pure placeholder/test runs)
+      if (scene.objectCount === 0 && scene.audioCount === 0) return false;
+      // Drop scenes whose name or prompt matches known junk patterns
+      if (JUNK_PATTERNS.some(p => p.test(name) || p.test(prompt))) return false;
+      return true;
+    });
+
     // Sort by date (newest first)
-    const sortedScenes = allScenes.sort(
+    const sortedScenes = cleanScenes.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
     
