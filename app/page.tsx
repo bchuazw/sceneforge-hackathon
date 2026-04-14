@@ -105,8 +105,14 @@ export default function Home() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
-              <p className="text-slate-300 animate-pulse">Generating your scene...</p>
-              <p className="text-xs text-slate-500">This may take 10-30 seconds</p>
+              <p className="text-slate-300 animate-pulse">Building your world...</p>
+              <div className="text-xs text-slate-500 space-y-1 text-left">
+                <p>🧠 Parsing scene with GPT-4o...</p>
+                <p>🔍 Searching similar scenes via turbopuffer...</p>
+                <p>🎵 Composing music with ElevenLabs...</p>
+                <p>🔊 Generating sound effects...</p>
+                <p>🌄 Rendering skybox...</p>
+              </div>
             </div>
           </div>
         )}
@@ -160,10 +166,10 @@ export default function Home() {
           <h3 className="text-sm font-medium text-slate-400 mb-3">Try these examples:</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
-              'A peaceful Japanese garden with cherry blossoms and a koi pond at sunset',
-              'Cyberpunk city street with neon signs, rain, and flying cars at night',
-              'Medieval castle courtyard with torches and knights preparing for battle',
-              'Alien planet with purple crystals, floating rocks, and two moons',
+              'NASCAR racing track at sunset with grandstands, pit crews, and racing cars',
+              'Futuristic sci-fi shooter arena with cover barriers, energy weapons, and glowing floors',
+              'Cyberpunk city street with neon signs, rain-soaked roads, and flying cars at night',
+              'Ancient fantasy forest with mystical ruins, giant mushrooms, and wandering spirits',
             ].map((example, i) => (
               <button
                 key={i}
