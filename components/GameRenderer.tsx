@@ -57,8 +57,13 @@ interface GameRendererProps {
 const environmentPresets: Record<string, any> = {
   forest: 'forest',
   city: 'city',
+  nature: 'forest',
+  adventure: 'sunset',
+  fantasy: 'sunset',
   sunset: 'sunset',
   desert: 'dawn',
+  racing: 'dawn',
+  scifi: 'night',
   cyberpunk: 'night',
   horror: 'night',
   space: 'night',
@@ -114,6 +119,18 @@ const getMaterialConfig = (type: string, theme: string) => {
   if (theme === 'horror') {
     return { ...configs[type] || configs.prop, color: '#3a2525', emissive: '#ff0000', emissiveIntensity: 0.1 };
   }
+  if (theme === 'racing') {
+    if (type === 'vehicle') return { ...configs.vehicle, color: '#ff2200', clearcoat: 1.0, clearcoatRoughness: 0.05 };
+    if (type === 'building') return { ...configs.building, color: '#cccccc', metalness: 0.4 };
+  }
+  if (theme === 'scifi') {
+    if (type === 'building') return { ...configs.building, color: '#334455', emissive: '#0088ff', emissiveIntensity: 0.2 };
+    if (type === 'vehicle') return { ...configs.vehicle, color: '#223344', emissive: '#00ffcc', emissiveIntensity: 0.3 };
+  }
+  if (theme === 'fantasy') {
+    if (type === 'building') return { ...configs.building, color: '#7a5c3c', metalness: 0.0 };
+    if (type === 'character') return { ...configs.character, color: '#c0a060', metalness: 0.5 };
+  }
 
   return configs[type] || configs.prop;
 };
@@ -138,6 +155,14 @@ function ParticleEffects({ theme, mood, isDayTime }: { theme: string; mood: stri
           color: '#00ffff',
           size: 0.02,
           speed: 0.8,
+          type: 'neon',
+        };
+      case 'scifi':
+        return {
+          count: 150,
+          color: '#00ffcc',
+          size: 0.03,
+          speed: 1.0,
           type: 'neon',
         };
       case 'space':
@@ -260,10 +285,11 @@ function HeatShimmer({ enabled }: { enabled: boolean }) {
 export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameRendererProps) {
   const musicFile = audioFiles?.find((a) => a.type === 'music');
   const sfxFiles = audioFiles?.filter((a) => a.type === 'sfx') || [];
-  
+
   const [isDayTime, setIsDayTime] = useState(sceneData.time !== 'night');
   const [cameraMode, setCameraMode] = useState<'follow' | 'orbit'>('follow');
   const [isMobile, setIsMobile] = useState(false);
+  const [mouseLocked, setMouseLocked] = useState(false);
   
   // Detect mobile device
   useEffect(() => {
@@ -429,10 +455,12 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
           <planeGeometry args={[200, 200]} />
           <meshPhysicalMaterial 
             color={
-              sceneData.theme === 'forest' ? '#2d4a2d' :
+              sceneData.theme === 'forest' || sceneData.theme === 'nature' ? '#2d4a2d' :
               sceneData.theme === 'desert' ? '#c4a35a' :
               sceneData.theme === 'horror' ? '#1a0f0f' :
-              sceneData.theme === 'cyberpunk' ? '#1a1a2e' :
+              sceneData.theme === 'cyberpunk' || sceneData.theme === 'scifi' ? '#1a1a2e' :
+              sceneData.theme === 'racing' ? '#333333' :
+              sceneData.theme === 'fantasy' ? '#4a3a2a' :
               isDayTime ? '#3a5a3a' : '#1a1a2a'
             }
             roughness={0.9}
@@ -476,7 +504,7 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
         ))}
         
         {/* Player with Camera Controller */}
-        <PlayerController cameraMode={cameraMode} theme={sceneData.theme} />
+        <PlayerController cameraMode={cameraMode} theme={sceneData.theme} onMouseLockChange={setMouseLocked} />
         
         {/* Camera controller for orbit mode */}
         {cameraMode === 'orbit' && <OrbitCamera />}
@@ -493,8 +521,18 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
         </EffectComposer>
       </Canvas>
       
+      {/* Click to Play overlay — outside Canvas so DOM renders correctly */}
+      {!mouseLocked && cameraMode === 'follow' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+          <div className="bg-black/80 backdrop-blur-md text-white px-8 py-6 rounded-2xl text-center border border-white/10 shadow-2xl">
+            <p className="text-2xl font-bold mb-2">🎮 Click to Play</p>
+            <p className="text-sm text-slate-400">WASD to move • Mouse to look • Space to jump</p>
+          </div>
+        </div>
+      )}
+
       {/* Enhanced HUD */}
-      <div 
+      <div
         className={`absolute top-2 sm:top-4 left-2 sm:left-4 transition-all duration-700 transform ${
           hudVisible ? 'translate-x-0 opacity-100' : '-translate-x-10 opacity-0'
         }`}
@@ -504,11 +542,17 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
           <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
             <span className="text-lg sm:text-2xl">
               {sceneData.theme === 'forest' ? '🌲' :
+               sceneData.theme === 'nature' ? '🌿' :
                sceneData.theme === 'city' ? '🏙️' :
                sceneData.theme === 'desert' ? '🏜️' :
                sceneData.theme === 'cyberpunk' ? '🌃' :
                sceneData.theme === 'horror' ? '👻' :
-               sceneData.theme === 'space' ? '🚀' : '🎮'}
+               sceneData.theme === 'space' ? '🚀' :
+               sceneData.theme === 'scifi' ? '🛸' :
+               sceneData.theme === 'racing' ? '🏎️' :
+               sceneData.theme === 'fantasy' ? '⚔️' :
+               sceneData.theme === 'adventure' ? '🗺️' :
+               sceneData.theme === 'underwater' ? '🐠' : '🎮'}
             </span>
             <div className="min-w-0">
               <div className="font-bold text-purple-400 text-sm sm:text-lg tracking-wide truncate">{sceneData.scene_name}</div>
@@ -909,7 +953,7 @@ function InteractiveObject({
 }
 
 // Enhanced Player Controller Component
-function PlayerController({ cameraMode, theme }: { cameraMode: 'follow' | 'orbit'; theme: string }) {
+function PlayerController({ cameraMode, theme, onMouseLockChange }: { cameraMode: 'follow' | 'orbit'; theme: string; onMouseLockChange?: (locked: boolean) => void }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const { camera } = useThree();
   const [keys, setKeys] = useState<Set<string>>(new Set());
@@ -951,7 +995,9 @@ function PlayerController({ cameraMode, theme }: { cameraMode: 'follow' | 'orbit
     };
     
     const handlePointerLockChange = () => {
-      setMouseLocked(document.pointerLockElement === document.body);
+      const locked = document.pointerLockElement === document.body;
+      setMouseLocked(locked);
+      onMouseLockChange?.(locked);
     };
     
     window.addEventListener('keydown', handleKeyDown);
@@ -1053,15 +1099,6 @@ function PlayerController({ cameraMode, theme }: { cameraMode: 'follow' | 'orbit
         castShadow
       />
       
-      {/* Instructions overlay */}
-      {!mouseLocked && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-          <div className="bg-black/80 backdrop-blur-md text-white px-8 py-6 rounded-2xl text-center border border-white/10 shadow-2xl">
-            <p className="text-2xl font-bold mb-2">🎮 Click to Play</p>
-            <p className="text-sm text-slate-400">WASD to move • Mouse to look • Space to jump</p>
-          </div>
-        </div>
-      )}
     </>
   );
 }
