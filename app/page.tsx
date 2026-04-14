@@ -47,27 +47,27 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white p-8">
+    <main className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
       <div className="max-w-2xl mx-auto">
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex flex-col sm:flex-row justify-between items-start mb-2 gap-4">
           <div>
-            <h1 className="text-5xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+            <h1 className="text-3xl sm:text-5xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
               SceneForge AI
             </h1>
-            <p className="text-slate-400 mb-8 text-lg">
+            <p className="text-slate-400 mb-6 sm:mb-8 text-base sm:text-lg">
               ElevenLabs × turbopuffer Hackathon
             </p>
           </div>
           <Link
             href="/gallery"
-            className="bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-4 py-2 rounded-lg transition-all text-sm flex items-center gap-2"
+            className="w-full sm:w-auto bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-4 py-2 rounded-lg transition-all text-sm flex items-center justify-center gap-2"
           >
             <span>🖼️</span>
             Gallery
           </Link>
         </div>
         
-        <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+        <div className="bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-700">
           <label className="block text-sm font-medium mb-2 text-slate-300">
             Describe your scene
           </label>
@@ -75,13 +75,13 @@ export default function Home() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="e.g., Dark forest at night with a creepy cabin and wolf howls..."
-            className="w-full h-32 bg-slate-900 border border-slate-600 rounded-lg p-4 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+            className="w-full h-28 sm:h-32 bg-slate-900 border border-slate-600 rounded-lg p-3 sm:p-4 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none text-sm sm:text-base"
           />
           
           <button
             onClick={generateScene}
             disabled={loading || !prompt.trim()}
-            className="mt-4 w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-all"
+            className="mt-4 w-full sm:w-auto bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-all"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -135,10 +135,10 @@ export default function Home() {
               </p>
             )}
             
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
               <a
                 href={result.url}
-                className="inline-block bg-green-600 hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-all"
+                className="w-full sm:w-auto text-center bg-green-600 hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-all"
               >
                 🎮 Play Scene
               </a>
@@ -147,7 +147,7 @@ export default function Home() {
                   navigator.clipboard.writeText(`${window.location.origin}${result.url}`);
                   alert('Link copied to clipboard!');
                 }}
-                className="inline-block bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg transition-all"
+                className="w-full sm:w-auto bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg transition-all"
               >
                 📋 Copy Link
               </button>
@@ -176,16 +176,16 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="mt-12 grid grid-cols-3 gap-4 text-center text-sm text-slate-500">
-          <div className="p-4 bg-slate-800/30 rounded-lg">
+        <div className="mt-8 sm:mt-12 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-center text-sm text-slate-500">
+          <div className="p-3 sm:p-4 bg-slate-800/30 rounded-lg">
             <div className="text-2xl mb-1">🎵</div>
             ElevenLabs Audio
           </div>
-          <div className="p-4 bg-slate-800/30 rounded-lg">
+          <div className="p-3 sm:p-4 bg-slate-800/30 rounded-lg">
             <div className="text-2xl mb-1">🔍</div>
             turbopuffer Search
           </div>
-          <div className="p-4 bg-slate-800/30 rounded-lg">
+          <div className="p-3 sm:p-4 bg-slate-800/30 rounded-lg">
             <div className="text-2xl mb-1">🎮</div>
             Three.js Game
           </div>

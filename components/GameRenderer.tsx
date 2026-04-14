@@ -263,6 +263,19 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
   
   const [isDayTime, setIsDayTime] = useState(sceneData.time !== 'night');
   const [cameraMode, setCameraMode] = useState<'follow' | 'orbit'>('follow');
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+      const isSmallScreen = window.innerWidth < 768;
+      setIsMobile(isTouchDevice || isSmallScreen);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [hudVisible, setHudVisible] = useState(false);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<string>('');
   
@@ -298,8 +311,12 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
   const showHeatShimmer = sceneData.theme === 'desert';
 
   return (
-    <div className="w-full h-screen bg-black relative overflow-hidden">
-      <Canvas camera={{ position: [0, 5, 10], fov: 60 }} shadows>
+    <div className="w-full h-[100dvh] bg-black relative overflow-hidden touch-none">
+      <Canvas 
+        camera={{ position: [0, 5, 10], fov: isMobile ? 75 : 60 }} 
+        shadows
+        style={{ touchAction: 'none' }}
+      >
         <color attach="background" args={[backgroundColor]} />
         <fog 
           attach="fog" 
@@ -478,14 +495,14 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
       
       {/* Enhanced HUD */}
       <div 
-        className={`absolute top-4 left-4 transition-all duration-700 transform ${
+        className={`absolute top-2 sm:top-4 left-2 sm:left-4 transition-all duration-700 transform ${
           hudVisible ? 'translate-x-0 opacity-100' : '-translate-x-10 opacity-0'
         }`}
       >
-        <div className="text-white font-mono text-sm bg-black/80 backdrop-blur-md p-5 rounded-xl border border-white/10 shadow-2xl pointer-events-auto min-w-[220px]">
+        <div className="text-white font-mono text-xs sm:text-sm bg-black/80 backdrop-blur-md p-3 sm:p-5 rounded-lg sm:rounded-xl border border-white/10 shadow-2xl pointer-events-auto min-w-[160px] sm:min-w-[220px] max-w-[200px] sm:max-w-none">
           {/* Scene Title */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+            <span className="text-lg sm:text-2xl">
               {sceneData.theme === 'forest' ? '🌲' :
                sceneData.theme === 'city' ? '🏙️' :
                sceneData.theme === 'desert' ? '🏜️' :
@@ -493,9 +510,9 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
                sceneData.theme === 'horror' ? '👻' :
                sceneData.theme === 'space' ? '🚀' : '🎮'}
             </span>
-            <div>
-              <div className="font-bold text-purple-400 text-lg tracking-wide">{sceneData.scene_name}</div>
-              <div className="text-xs text-slate-400">{sceneData.theme} • {sceneData.mood}</div>
+            <div className="min-w-0">
+              <div className="font-bold text-purple-400 text-sm sm:text-lg tracking-wide truncate">{sceneData.scene_name}</div>
+              <div className="text-[10px] sm:text-xs text-slate-400">{sceneData.theme} • {sceneData.mood}</div>
             </div>
           </div>
           
@@ -510,8 +527,8 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
           {/* Divider */}
           <div className="h-px bg-gradient-to-r from-purple-500/50 to-transparent mb-3" />
           
-          {/* Controls info */}
-          <div className="space-y-1.5 text-xs text-slate-400 mb-4">
+          {/* Controls info - Hidden on mobile, shown on larger screens */}
+          <div className="hidden sm:block space-y-1.5 text-xs text-slate-400 mb-4">
             <div className="flex items-center gap-2">
               <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">WASD</kbd>
               <span>Move</span>
@@ -526,27 +543,34 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
             </div>
           </div>
           
+          {/* Mobile controls hint */}
+          {isMobile && (
+            <div className="sm:hidden text-[10px] text-slate-400 mb-2">
+              <p>Tap to look • Use on-screen controls</p>
+            </div>
+          )}
+          
           {/* Controls */}
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             <button
               onClick={() => setIsDayTime(!isDayTime)}
-              className="w-full text-xs bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 px-3 py-2 rounded-lg transition-all transform hover:scale-[1.02] border border-white/5 flex items-center justify-center gap-2"
+              className="w-full text-[10px] sm:text-xs bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all transform hover:scale-[1.02] border border-white/5 flex items-center justify-center gap-1.5 sm:gap-2"
             >
-              {isDayTime ? '🌙 Switch to Night' : '☀️ Switch to Day'}
+              {isDayTime ? '🌙 Night' : '☀️ Day'}
             </button>
             <button
               onClick={() => setCameraMode(cameraMode === 'follow' ? 'orbit' : 'follow')}
-              className="w-full text-xs bg-gradient-to-r from-purple-700/80 to-indigo-700/80 hover:from-purple-600/80 hover:to-indigo-600/80 px-3 py-2 rounded-lg transition-all transform hover:scale-[1.02] border border-purple-500/20 flex items-center justify-center gap-2"
+              className="w-full text-[10px] sm:text-xs bg-gradient-to-r from-purple-700/80 to-indigo-700/80 hover:from-purple-600/80 hover:to-indigo-600/80 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all transform hover:scale-[1.02] border border-purple-500/20 flex items-center justify-center gap-1.5 sm:gap-2"
             >
-              {cameraMode === 'follow' ? '📷 Orbit Camera' : '🎮 Follow Camera'}
+              {cameraMode === 'follow' ? '📷 Orbit' : '🎮 Follow'}
             </button>
           </div>
         </div>
       </div>
       
-      {/* Compass / Mini-map */}
+      {/* Compass / Mini-map - Hidden on mobile */}
       <div 
-        className={`absolute top-4 right-4 transition-all duration-700 delay-200 transform ${
+        className={`hidden sm:block absolute top-4 right-4 transition-all duration-700 delay-200 transform ${
           hudVisible ? 'translate-x-0 opacity-100' : 'translate-x-10 opacity-0'
         }`}
       >
@@ -566,18 +590,18 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
       {/* Audio Track Display */}
       {currentlyPlaying && (
         <div 
-          className={`absolute bottom-20 left-4 transition-all duration-700 delay-300 transform ${
+          className={`absolute bottom-16 sm:bottom-20 left-2 sm:left-4 transition-all duration-700 delay-300 transform ${
             hudVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
           }`}
         >
-          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-sm px-3 py-2 rounded-lg border border-white/5">
+          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-white/5">
             <div className="flex gap-0.5">
               <div className="w-1 h-3 bg-purple-500 animate-pulse" />
               <div className="w-1 h-4 bg-purple-400 animate-pulse delay-75" />
               <div className="w-1 h-2 bg-purple-300 animate-pulse delay-150" />
               <div className="w-1 h-5 bg-purple-400 animate-pulse delay-100" />
             </div>
-            <span className="text-xs text-slate-300">♫ {currentlyPlaying}</span>
+            <span className="text-[10px] sm:text-xs text-slate-300 truncate max-w-[120px] sm:max-w-none">♫ {currentlyPlaying}</span>
           </div>
         </div>
       )}
@@ -588,7 +612,7 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
           hudVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
         }`}
       >
-        <div className="flex items-center gap-4 text-white text-xs bg-black/60 backdrop-blur-sm px-5 py-2.5 rounded-full border border-white/10">
+        <div className="flex items-center gap-2 sm:gap-4 text-white text-[10px] sm:text-xs bg-black/60 backdrop-blur-sm px-3 sm:px-5 py-2 sm:py-2.5 rounded-full border border-white/10">
           <span className="flex items-center gap-1.5">
             <span className="text-purple-400 font-bold">{sceneData.objects?.length || 0}</span>
             <span className="text-slate-400">objects</span>
@@ -602,14 +626,37 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
       
       {/* Theme indicator */}
       <div 
-        className={`absolute bottom-4 right-4 transition-all duration-700 delay-500 transform ${
+        className={`absolute bottom-4 right-2 sm:right-4 transition-all duration-700 delay-500 transform ${
           hudVisible ? 'translate-x-0 opacity-100' : 'translate-x-10 opacity-0'
         }`}
       >
-        <div className="text-[10px] text-slate-500 font-mono">
+        <div className="text-[8px] sm:text-[10px] text-slate-500 font-mono">
           SceneForge AI v1.0
         </div>
       </div>
+      
+      {/* Mobile touch controls overlay */}
+      {isMobile && (
+        <div className="absolute bottom-24 left-4 right-4 pointer-events-none sm:hidden">
+          <div className="flex justify-between items-end">
+            {/* D-pad hint */}
+            <div className="pointer-events-auto bg-black/60 backdrop-blur-sm p-2 rounded-lg border border-white/10">
+              <div className="grid grid-cols-3 gap-1 w-24">
+                <div></div>
+                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">↑</button>
+                <div></div>
+                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">←</button>
+                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">↓</button>
+                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">→</button>
+              </div>
+            </div>
+            {/* Action buttons */}
+            <div className="pointer-events-auto flex gap-2">
+              <button className="w-12 h-12 bg-purple-600/80 rounded-full flex items-center justify-center text-white text-xs font-bold">Jump</button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Background Audio */}
       {musicFile && (

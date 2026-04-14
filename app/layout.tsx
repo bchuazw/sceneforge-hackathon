@@ -1,8 +1,15 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 // Use production URL as default, fallback to localhost for dev
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://sceneforge-hackathon.onrender.com';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
