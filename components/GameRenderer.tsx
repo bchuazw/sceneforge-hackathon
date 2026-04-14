@@ -1079,21 +1079,19 @@ function PlayerController({ cameraMode, theme, onMouseLockChange }: { cameraMode
   });
 
   const playerColor = theme === 'cyberpunk' ? '#00ffff' : theme === 'horror' ? '#ff4444' : '#6366f1';
-  
+
   return (
     <>
-      <Float speed={3} rotationIntensity={0.2} floatIntensity={0.3}>
-        <mesh ref={meshRef} position={[0, 0.5, 0]} castShadow>
-          <boxGeometry args={[0.8, 0.8, 0.8]} />
-          <meshPhysicalMaterial 
-            color={playerColor} 
-            emissive={playerColor}
-            emissiveIntensity={0.3}
-            roughness={0.3}
-            metalness={0.7}
-          />
-        </mesh>
-      </Float>
+      <mesh ref={meshRef} position={[0, 0.5, 0]} castShadow>
+        <boxGeometry args={[0.8, 0.8, 0.8]} />
+        <meshPhysicalMaterial
+          color={playerColor}
+          emissive={playerColor}
+          emissiveIntensity={0.3}
+          roughness={0.3}
+          metalness={0.7}
+        />
+      </mesh>
       
       {/* Spotlight following player */}
       <spotLight
