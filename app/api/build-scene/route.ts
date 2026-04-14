@@ -69,50 +69,10 @@ export async function POST(req: Request) {
     }
 
     // Step 4b: Generate narration via ElevenLabs TTS (if the parser produced one)
-    let narrationUrl: string | null = null;
-    let narrationError: string | null = null;
-    if (sceneData?.narration && process.env.ELEVENLABS_API_KEY) {
-      console.log('Step 4b: Generating narration...');
-      await mkdir(path.join(process.cwd(), 'public/generated'), { recursive: true });
-      const narrFilename = `narration-${sceneId}.mp3`;
-      const narrPath = path.join(process.cwd(), 'public/generated', narrFilename);
-      const ttsModels = ['eleven_multilingual_v2', 'eleven_monolingual_v1'];
-      for (const model_id of ttsModels) {
-        try {
-          const ttsResp = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'xi-api-key': process.env.ELEVENLABS_API_KEY,
-              },
-              body: JSON.stringify({
-                text: sceneData.narration,
-                model_id,
-                voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-              }),
-            }
-          );
-          if (ttsResp.ok) {
-            const buf = Buffer.from(await ttsResp.arrayBuffer());
-            await writeFile(narrPath, buf);
-            narrationUrl = `/api/files/${narrFilename}`;
-            console.log(`Narration generated (${model_id}):`, narrationUrl);
-            break;
-          } else {
-            const errText = await ttsResp.text();
-            narrationError = `${model_id}: HTTP ${ttsResp.status} — ${errText}`;
-            console.error(`Narration TTS error with ${model_id}:`, errText);
-          }
-        } catch (narrErr: any) {
-          narrationError = `${model_id}: ${narrErr?.message || String(narrErr)}`;
-          console.error(`Narration generation error (${model_id}):`, narrErr);
-        }
-      }
-    } else {
-      narrationError = sceneData?.narration ? 'ELEVENLABS_API_KEY not set' : 'no narration text from parser';
-    }
+    // TTS narration: disabled — requires ElevenLabs Creator plan (401 on lower tiers).
+    // The hackathon focus is music + SFX; narration can be added via /api/generate-narration
+    // by users who have TTS credits on their account.
+    const narrationUrl: string | null = null;
     
     // Step 5: Save scene data as JSON
     console.log('Step 5: Saving scene data...');
@@ -181,7 +141,6 @@ export async function POST(req: Request) {
         similarScenesFound: similarScenes?.length || 0,
         skybox: !!skyboxUrl,
         narration: !!narrationUrl,
-        narrationError: narrationError || undefined,
       }
     });
     
