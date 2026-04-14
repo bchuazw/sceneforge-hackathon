@@ -290,6 +290,14 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
   const [cameraMode, setCameraMode] = useState<'follow' | 'orbit'>('follow');
   const [isMobile, setIsMobile] = useState(false);
   const [mouseLocked, setMouseLocked] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Start music only after user interaction (pointer lock) to satisfy browser autoplay policy
+  useEffect(() => {
+    if (mouseLocked && audioRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
+  }, [mouseLocked]);
   
   // Detect mobile device
   useEffect(() => {
@@ -702,12 +710,12 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
         </div>
       )}
       
-      {/* Background Audio */}
+      {/* Background Audio — starts after pointer lock (user interaction) to satisfy autoplay policy */}
       {musicFile && (
-        <audio 
-          src={musicFile.url} 
-          autoPlay 
-          loop 
+        <audio
+          ref={audioRef}
+          src={musicFile.url}
+          loop
           className="hidden"
         />
       )}
