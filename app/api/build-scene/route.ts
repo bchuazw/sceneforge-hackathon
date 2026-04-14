@@ -72,35 +72,40 @@ export async function POST(req: Request) {
     let narrationUrl: string | null = null;
     if (sceneData?.narration && process.env.ELEVENLABS_API_KEY) {
       console.log('Step 4b: Generating narration...');
-      try {
-        const { writeFile: wf } = await import('fs/promises');
-        const narrFilename = `narration-${sceneId}.mp3`;
-        const narrPath = path.join(process.cwd(), 'public/generated', narrFilename);
-        const ttsResp = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'xi-api-key': process.env.ELEVENLABS_API_KEY,
-            },
-            body: JSON.stringify({
-              text: sceneData.narration,
-              model_id: 'eleven_multilingual_v2',
-              voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-            }),
+      const narrFilename = `narration-${sceneId}.mp3`;
+      const narrPath = path.join(process.cwd(), 'public/generated', narrFilename);
+      // Try high-quality model first, fall back to the universally available one
+      const ttsModels = ['eleven_multilingual_v2', 'eleven_monolingual_v1'];
+      for (const model_id of ttsModels) {
+        try {
+          const ttsResp = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'xi-api-key': process.env.ELEVENLABS_API_KEY,
+              },
+              body: JSON.stringify({
+                text: sceneData.narration,
+                model_id,
+                voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+              }),
+            }
+          );
+          if (ttsResp.ok) {
+            const buf = Buffer.from(await ttsResp.arrayBuffer());
+            await writeFile(narrPath, buf);
+            narrationUrl = `/api/files/${narrFilename}`;
+            console.log(`Narration generated (${model_id}):`, narrationUrl);
+            break;
+          } else {
+            const errText = await ttsResp.text();
+            console.error(`Narration TTS error with ${model_id}:`, errText);
           }
-        );
-        if (ttsResp.ok) {
-          const buf = Buffer.from(await ttsResp.arrayBuffer());
-          await wf(narrPath, buf);
-          narrationUrl = `/api/files/${narrFilename}`;
-          console.log('Narration generated:', narrationUrl);
-        } else {
-          console.error('Narration TTS error:', await ttsResp.text());
+        } catch (narrErr) {
+          console.error(`Narration generation error (${model_id}):`, narrErr);
         }
-      } catch (narrErr) {
-        console.error('Narration generation error (non-fatal):', narrErr);
       }
     }
     
