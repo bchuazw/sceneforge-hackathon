@@ -76,7 +76,6 @@ export default function PlayScenePage() {
   const [similarScenes, setSimilarScenes] = useState<SimilarScene[]>([]);
   const [narrationUrl, setNarrationUrl] = useState<string | null>(null);
   const [narrationLoading, setNarrationLoading] = useState(false);
-  const [showJson, setShowJson] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -158,18 +157,6 @@ export default function PlayScenePage() {
     router.push('/');
   };
 
-  const copySceneJson = () => {
-    if (!scene) return;
-    
-    const json = JSON.stringify({
-      prompt: scene.prompt,
-      sceneData: scene.sceneData,
-    }, null, 2);
-    
-    navigator.clipboard.writeText(json);
-    alert('Scene JSON copied to clipboard!');
-  };
-
   const shareScene = async () => {
     const url = `${window.location.origin}/play/${id}`;
     
@@ -229,54 +216,42 @@ export default function PlayScenePage() {
 
   return (
     <div className="relative">
-      <GameRenderer 
+      <GameRenderer
         sceneData={scene.sceneData}
         audioFiles={scene.audioFiles}
         skyboxUrl={scene.skyboxUrl}
       />
-      
-      {/* Scene Info Panel */}
-      <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
-        <div className="bg-black/70 backdrop-blur-sm text-white p-4 rounded-lg pointer-events-auto max-w-sm">
-          <h1 className="font-bold text-purple-400 text-lg">{scene.sceneData.scene_name}</h1>
-          <p className="text-sm text-slate-300 mt-1">{scene.sceneData.theme} • {scene.sceneData.mood}</p>
-          <p className="text-xs text-slate-400 mt-2 line-clamp-2">{scene.prompt}</p>
-          
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2 mt-3">
-            <button
-              onClick={shareScene}
-              className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded transition-colors"
-            >
-              📤 Share
-            </button>
-            <button
-              onClick={handleRemix}
-              className="text-xs bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded transition-colors"
-            >
-              🎨 Remix
-            </button>
-            <button
-              onClick={() => setShowJson(!showJson)}
-              className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded transition-colors"
-            >
-              {showJson ? '📋 Hide JSON' : '📋 Show JSON'}
-            </button>
-            <button
-              onClick={exportScene}
-              className="text-xs bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded transition-colors"
-              title="Download as standalone HTML"
-            >
-              ⬇️ Export
-            </button>
-          </div>
-          
-          {/* Narration Button */}
+
+      {/* Action toolbar — bottom-right, clear of GameRenderer's HUD positions */}
+      <div className="absolute bottom-4 right-4 flex flex-col items-end gap-2 pointer-events-none">
+        <div className="flex gap-2 pointer-events-auto">
+          <button
+            onClick={shareScene}
+            className="text-xs bg-black/70 backdrop-blur-sm hover:bg-black/90 text-white px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+          >
+            📤 Share
+          </button>
+          <button
+            onClick={handleRemix}
+            className="text-xs bg-purple-700/80 backdrop-blur-sm hover:bg-purple-600/80 text-white px-3 py-1.5 rounded-lg border border-purple-500/20 transition-colors"
+          >
+            🎨 Remix
+          </button>
+          <button
+            onClick={exportScene}
+            className="text-xs bg-black/70 backdrop-blur-sm hover:bg-black/90 text-white px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+          >
+            ⬇️ Export
+          </button>
+        </div>
+
+        {/* Narration */}
+        <div className="pointer-events-auto">
           {!narrationUrl ? (
             <button
               onClick={generateNarration}
               disabled={narrationLoading}
-              className="mt-3 w-full text-xs bg-green-700 hover:bg-green-600 disabled:bg-slate-700 px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-2"
+              className="text-xs bg-black/70 backdrop-blur-sm hover:bg-black/90 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg border border-white/10 transition-colors flex items-center gap-1.5"
             >
               {narrationLoading ? (
                 <>
@@ -284,70 +259,48 @@ export default function PlayScenePage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Generating Voice...
+                  Generating voice...
                 </>
-              ) : (
-                <>🎙️ Add Voice Narration</>
-              )}
+              ) : <>🎙️ Voice narration</>}
             </button>
           ) : (
-            <div className="mt-3">
-              <audio src={narrationUrl} controls className="w-full h-8" />
-            </div>
-          )}
-          
-          {/* JSON Preview */}
-          {showJson && (
-            <div className="mt-3">
-              <pre className="text-xs bg-slate-900 p-2 rounded overflow-auto max-h-40">
-                {JSON.stringify({ prompt: scene.prompt, sceneData: scene.sceneData }, null, 2)}
-              </pre>
-              <button
-                onClick={copySceneJson}
-                className="mt-2 text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded transition-colors w-full"
-              >
-                📋 Copy JSON
-              </button>
-            </div>
+            <audio src={narrationUrl} controls className="h-8 rounded-lg" />
           )}
         </div>
-        
-        {/* Similar Scenes */}
-        {similarScenes.length > 0 && (
-          <div className="bg-black/70 backdrop-blur-sm text-white p-4 rounded-lg pointer-events-auto max-w-xs">
-            <h3 className="text-sm font-semibold text-purple-400 mb-2">🔍 Similar Scenes</h3>
-            <div className="space-y-2">
-              {similarScenes.map((similar) => (
+      </div>
+
+      {/* Similar Scenes — top-right but below the compass (mt pushes it down) */}
+      {similarScenes.length > 0 && (
+        <div className="absolute top-28 right-4 pointer-events-auto">
+          <div className="bg-black/70 backdrop-blur-sm text-white p-3 rounded-lg max-w-[180px] border border-white/10">
+            <h3 className="text-xs font-semibold text-purple-400 mb-2">🔍 Similar</h3>
+            <div className="space-y-1.5">
+              {similarScenes.slice(0, 3).map((similar) => (
                 <Link
                   key={similar.id}
                   href={`/play/${similar.id}`}
-                  className="block text-xs bg-slate-800 hover:bg-slate-700 p-2 rounded transition-colors"
+                  className="block text-[10px] bg-slate-800/80 hover:bg-slate-700 p-1.5 rounded transition-colors"
                 >
-                  <div className="font-medium">{similar.scene_name || 'Untitled Scene'}</div>
-                  <div className="text-slate-400">
-                    {similar.theme} • {similar.mood}
-                  </div>
-                  <div className="text-slate-500 text-[10px]">
-                    Match: {((1 - (similar.score || 0)) * 100).toFixed(0)}%
-                  </div>
+                  <div className="font-medium truncate">{similar.scene_name || 'Untitled'}</div>
+                  <div className="text-slate-400">{((1 - (similar.score || 0)) * 100).toFixed(0)}% match</div>
                 </Link>
               ))}
             </div>
           </div>
-        )}
-      </div>
-      
-      {/* Back Link */}
-      <Link 
+        </div>
+      )}
+
+      {/* Back Link — bottom-left, but clear of GameRenderer's audio track (which is bottom-16 / bottom-20) */}
+      <Link
         href="/"
-        className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg hover:bg-black/80 transition-colors pointer-events-auto"
+        className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 text-xs rounded-lg hover:bg-black/80 transition-colors border border-white/10"
       >
-        ← Back to Generator
+        ← Generator
       </Link>
-      
-      <Link 
+
+      <Link
         href="/gallery"
-        className="absolute bottom-4 right-4 bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-lg hover:bg-black/80 transition-colors pointer-events-auto"
+        className="absolute bottom-4 left-28 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 text-xs rounded-lg hover:bg-black/80 transition-colors border border-white/10"
       >
         🖼️ Gallery
       </Link>
