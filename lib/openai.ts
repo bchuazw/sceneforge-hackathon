@@ -67,41 +67,46 @@ Schema:
   try {
     const openai = getOpenAI();
     // Try best-available model in order, falling back if unavailable to the account.
-    const modelCandidates = ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'];
+    // Each candidate defines its own param set so we never send params a given
+    // model doesn't understand.
+    type Candidate = { model: string; params: Record<string, any> };
+    const candidates: Candidate[] = [
+      { model: 'gpt-5', params: { max_completion_tokens: 8000, reasoning_effort: 'high' } },
+      { model: 'gpt-5-mini', params: { max_completion_tokens: 8000, reasoning_effort: 'high' } },
+      { model: 'gpt-4.5-preview', params: { max_tokens: 6000, temperature: 0.8 } },
+      { model: 'gpt-4.1', params: { max_tokens: 6000, temperature: 0.8 } },
+      { model: 'gpt-4o', params: { max_tokens: 6000, temperature: 0.8 } },
+    ];
     let response: any = null;
     let lastErr: any = null;
-    for (const model of modelCandidates) {
+    let usedModel = '';
+    for (const c of candidates) {
       try {
-        const params: any = {
-          model,
+        response = await openai.chat.completions.create({
+          model: c.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt },
           ],
-          max_completion_tokens: 8000,
           response_format: { type: 'json_object' },
-        };
-        // GPT-5 series ignores temperature and supports reasoning_effort;
-        // older chat models use temperature.
-        if (model.startsWith('gpt-5')) {
-          params.reasoning_effort = 'high';
-        } else {
-          params.temperature = 0.8;
-          delete params.max_completion_tokens;
-          params.max_tokens = 6000;
-        }
-        response = await openai.chat.completions.create(params);
-        console.log(`parseSceneDescription: using model=${model}`);
+          ...c.params,
+        } as any);
+        usedModel = c.model;
+        console.log(`parseSceneDescription: using model=${c.model}`);
         break;
       } catch (err: any) {
         lastErr = err;
         const msg = err?.message || String(err);
-        console.warn(`parseSceneDescription: model ${model} failed (${msg.slice(0, 160)}), trying next candidate`);
+        console.warn(`parseSceneDescription: ${c.model} failed: ${msg.slice(0, 200)}`);
       }
     }
-    if (!response) throw lastErr || new Error('No model available');
+    if (!response) {
+      const hint = lastErr?.message?.slice(0, 200) || 'unknown';
+      throw new Error(`all models failed, last=${hint}`);
+    }
 
     const content = response.choices[0]?.message?.content || '';
+    console.log(`parseSceneDescription: model=${usedModel} content_len=${content.length}`);
     
     // Extract JSON from response (handle markdown code blocks)
     const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || 
@@ -117,7 +122,7 @@ Schema:
     };
   } catch (error: any) {
     console.error("OpenAI parse error:", error.message);
-    // Fallback to basic structure
+    // Fallback to basic structure, but surface the error for diagnosis.
     return {
       scene_name: "Generated Scene",
       theme: "adventure",
@@ -131,6 +136,7 @@ Schema:
       audio_zones: [{ type: "ambient", sound: "wind", volume: 0.3 }],
       gameplay: { type: "exploration", camera: "third_person" },
       raw_prompt: prompt,
+      _parse_error: error?.message || String(error),
     };
   }
 }
