@@ -66,16 +66,44 @@ Schema:
 
   try {
     const openai = getOpenAI();
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.8,
-      max_tokens: 6000,
-      response_format: { type: 'json_object' },
-    });
+    // Try best-available model in order, falling back if unavailable to the account.
+    const modelCandidates = ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o'];
+    let response: any = null;
+    let lastErr: any = null;
+    for (const model of modelCandidates) {
+      try {
+        const params: any = {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          max_completion_tokens: 8000,
+          response_format: { type: 'json_object' },
+        };
+        // GPT-5 series ignores temperature and supports reasoning_effort;
+        // older chat models use temperature.
+        if (model.startsWith('gpt-5')) {
+          params.reasoning_effort = 'high';
+        } else {
+          params.temperature = 0.8;
+          delete params.max_completion_tokens;
+          params.max_tokens = 6000;
+        }
+        response = await openai.chat.completions.create(params);
+        console.log(`parseSceneDescription: using model=${model}`);
+        break;
+      } catch (err: any) {
+        lastErr = err;
+        const msg = err?.message || '';
+        // Only keep trying on "model not found / unauthorized" type errors.
+        if (!/model|not.*found|does.?not.?exist|unsupported|unknown|invalid|permission|access/i.test(msg)) {
+          throw err;
+        }
+        console.warn(`parseSceneDescription: model ${model} unavailable (${msg.slice(0, 100)}), falling back`);
+      }
+    }
+    if (!response) throw lastErr || new Error('No model available');
 
     const content = response.choices[0]?.message?.content || '';
     

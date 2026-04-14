@@ -91,6 +91,12 @@ function resolveSubtype(obj: GameObject): string {
   const sub = String(obj.properties?.type || '').toLowerCase();
   const combined = (sub + ' ' + raw).trim();
 
+  // Track/road elements MUST match before 'building' so pit_lane/racetrack don't become towers.
+  if (/pit.?lane|pit.?stop|track|road|racetrack|tarmac|asphalt|lane/.test(combined)) return 'skip';
+  // Antennas, spectators, cones etc. — map to sensible stand-ins before fallback.
+  if (/antenna|satellite|dish/.test(combined)) return 'lamp_post';
+  if (/cone|pylon/.test(combined)) return 'barrel';
+  if (/crowd|spectator|fan/.test(combined)) return 'character';
   if (/mushroom|fungus|toadstool/.test(combined)) return 'mushroom';
   if (/crystal|shard|gem/.test(combined)) return 'crystal';
   if (/hologram|holo|dragon|spirit|ghost/.test(combined)) return 'hologram';
@@ -860,6 +866,8 @@ function SceneObject({ obj, theme, sfxFiles, index }: { obj: GameObject; theme: 
       return wrap(<FoodCart position={pos} scale={scale} />);
     case 'firefly':
       return null; // covered by particle system
+    case 'skip':
+      return null; // track / road / pit lane — drawn by the Ground component
     case 'barrel':
     default:
       return wrap(<Barrel position={pos} scale={scale} />);
@@ -965,9 +973,11 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
     <div className="w-full h-[100dvh] bg-black relative overflow-hidden touch-none">
       <Canvas
         shadows
-        dpr={[1, 1.5]}
-        camera={{ position: [0, 5, 14], fov: isMobile ? 75 : 62 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        dpr={[1, 1.25]}
+        frameloop="always"
+        camera={{ position: [0, 5, 20], fov: isMobile ? 75 : 62 }}
+        gl={{ antialias: true, powerPreference: 'high-performance', stencil: false, depth: true }}
+        performance={{ min: 0.5 }}
         style={{ touchAction: 'none' }}
       >
         <color attach="background" args={[isDayTime ? palette.sky : '#0a0a1a']} />
@@ -994,13 +1004,13 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
           intensity={isDayTime ? 1.35 : 0.4}
           color={isDayTime ? '#fff4dc' : sceneData.theme === 'cyberpunk' ? '#ff55ff' : '#4488ff'}
           castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-          shadow-camera-far={80}
-          shadow-camera-left={-40}
-          shadow-camera-right={40}
-          shadow-camera-top={40}
-          shadow-camera-bottom={-40}
+          shadow-mapSize-width={512}
+          shadow-mapSize-height={512}
+          shadow-camera-far={60}
+          shadow-camera-left={-25}
+          shadow-camera-right={25}
+          shadow-camera-top={25}
+          shadow-camera-bottom={-25}
           shadow-bias={-0.0005}
         />
 
@@ -1296,7 +1306,7 @@ function PlayerController({
 
   return (
     <>
-      <group ref={groupRef} position={[0, 0, 0]}>
+      <group ref={groupRef} position={[0, 0, 12]}>
         <group ref={bobRef}>
           {/* torso */}
           <mesh position={[0, 0.85, 0]} castShadow>
