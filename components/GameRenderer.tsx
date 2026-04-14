@@ -1,6 +1,6 @@
 'use client';
 
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import {
   Stars,
   Cloud,
@@ -43,6 +43,20 @@ interface GameRendererProps {
 // ──────────────────────────────────────────────────────────────────────────
 // Palette + subtype resolution
 // ──────────────────────────────────────────────────────────────────────────
+
+function SkyDome({ url }: { url: string }) {
+  const texture = useLoader(THREE.TextureLoader, url);
+  useMemo(() => {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+  }, [texture]);
+  return (
+    <mesh scale={[-1, 1, 1]}>
+      <sphereGeometry args={[200, 48, 32]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} toneMapped={false} />
+    </mesh>
+  );
+}
 
 const themePalette = (theme: string) => {
   switch (theme) {
@@ -960,11 +974,8 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
         <fog attach="fog" args={[palette.fog, 25, 110]} />
 
         {/* Skybox / environment lighting */}
-        {skyboxUrl ? (
-          <Environment files={skyboxUrl} background={false} />
-        ) : (
-          <Environment preset={isDayTime ? 'sunset' : 'night'} background={false} />
-        )}
+        <Environment preset={isDayTime ? 'sunset' : 'night'} background={false} />
+        {skyboxUrl && <SkyDome url={skyboxUrl} />}
 
         {/* Stars only in deep-night themes, fewer than before */}
         {!isDayTime && sceneData.theme !== 'cyberpunk' && (
