@@ -70,19 +70,21 @@ Schema:
     // Each candidate defines its own param set so we never send params a given
     // model doesn't understand.
     type Candidate = { model: string; params: Record<string, any> };
+    // Reasoning models spend a big chunk of tokens on private reasoning, so
+    // they need a generous max_completion_tokens budget OR reasoning will eat
+    // the whole budget and the content comes back empty.
     const candidates: Candidate[] = [
-      { model: 'gpt-5', params: { max_completion_tokens: 8000, reasoning_effort: 'high' } },
-      { model: 'gpt-5-mini', params: { max_completion_tokens: 8000, reasoning_effort: 'high' } },
-      { model: 'gpt-4.5-preview', params: { max_tokens: 6000, temperature: 0.8 } },
+      { model: 'gpt-5', params: { max_completion_tokens: 20000, reasoning_effort: 'medium' } },
+      { model: 'gpt-5-mini', params: { max_completion_tokens: 20000, reasoning_effort: 'medium' } },
       { model: 'gpt-4.1', params: { max_tokens: 6000, temperature: 0.8 } },
       { model: 'gpt-4o', params: { max_tokens: 6000, temperature: 0.8 } },
     ];
-    let response: any = null;
+    let content = '';
     let lastErr: any = null;
     let usedModel = '';
     for (const c of candidates) {
       try {
-        response = await openai.chat.completions.create({
+        const response: any = await openai.chat.completions.create({
           model: c.model,
           messages: [
             { role: 'system', content: systemPrompt },
@@ -91,22 +93,27 @@ Schema:
           response_format: { type: 'json_object' },
           ...c.params,
         } as any);
+        const msg = response.choices?.[0]?.message?.content || '';
+        const finish = response.choices?.[0]?.finish_reason;
+        console.log(`parseSceneDescription: ${c.model} finish=${finish} content_len=${msg.length}`);
+        if (!msg || msg.length < 50) {
+          lastErr = new Error(`${c.model} returned empty content (finish=${finish})`);
+          continue;
+        }
+        content = msg;
         usedModel = c.model;
-        console.log(`parseSceneDescription: using model=${c.model}`);
         break;
       } catch (err: any) {
         lastErr = err;
-        const msg = err?.message || String(err);
-        console.warn(`parseSceneDescription: ${c.model} failed: ${msg.slice(0, 200)}`);
+        const em = err?.message || String(err);
+        console.warn(`parseSceneDescription: ${c.model} failed: ${em.slice(0, 200)}`);
       }
     }
-    if (!response) {
+    if (!content) {
       const hint = lastErr?.message?.slice(0, 200) || 'unknown';
       throw new Error(`all models failed, last=${hint}`);
     }
-
-    const content = response.choices[0]?.message?.content || '';
-    console.log(`parseSceneDescription: model=${usedModel} content_len=${content.length}`);
+    console.log(`parseSceneDescription: using model=${usedModel}`);
     
     // Extract JSON from response (handle markdown code blocks)
     const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || 
