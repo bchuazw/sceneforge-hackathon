@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     let narrationUrl: string | null = null;
     if (sceneData?.narration && process.env.ELEVENLABS_API_KEY) {
       console.log('Step 4b: Generating narration...');
+      await mkdir(path.join(process.cwd(), 'public/generated'), { recursive: true });
       const narrFilename = `narration-${sceneId}.mp3`;
       const narrPath = path.join(process.cwd(), 'public/generated', narrFilename);
       // Try high-quality model first, fall back to the universally available one
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
       for (const model_id of ttsModels) {
         try {
           const ttsResp = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+            `https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM`,
             {
               method: 'POST',
               headers: {

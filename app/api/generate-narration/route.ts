@@ -6,7 +6,7 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_TTS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 
 // Default voice ID for narration (Adam - versatile)
-const DEFAULT_VOICE_ID = 'pNInz6obpgDQGcFmaJgB';
+const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
 
 export async function POST(req: Request) {
   try {
