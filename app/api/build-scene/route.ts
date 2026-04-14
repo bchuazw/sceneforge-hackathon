@@ -70,12 +70,12 @@ export async function POST(req: Request) {
 
     // Step 4b: Generate narration via ElevenLabs TTS (if the parser produced one)
     let narrationUrl: string | null = null;
+    let narrationError: string | null = null;
     if (sceneData?.narration && process.env.ELEVENLABS_API_KEY) {
       console.log('Step 4b: Generating narration...');
       await mkdir(path.join(process.cwd(), 'public/generated'), { recursive: true });
       const narrFilename = `narration-${sceneId}.mp3`;
       const narrPath = path.join(process.cwd(), 'public/generated', narrFilename);
-      // Try high-quality model first, fall back to the universally available one
       const ttsModels = ['eleven_multilingual_v2', 'eleven_monolingual_v1'];
       for (const model_id of ttsModels) {
         try {
@@ -102,12 +102,16 @@ export async function POST(req: Request) {
             break;
           } else {
             const errText = await ttsResp.text();
+            narrationError = `${model_id}: HTTP ${ttsResp.status} — ${errText}`;
             console.error(`Narration TTS error with ${model_id}:`, errText);
           }
-        } catch (narrErr) {
+        } catch (narrErr: any) {
+          narrationError = `${model_id}: ${narrErr?.message || String(narrErr)}`;
           console.error(`Narration generation error (${model_id}):`, narrErr);
         }
       }
+    } else {
+      narrationError = sceneData?.narration ? 'ELEVENLABS_API_KEY not set' : 'no narration text from parser';
     }
     
     // Step 5: Save scene data as JSON
@@ -177,6 +181,7 @@ export async function POST(req: Request) {
         similarScenesFound: similarScenes?.length || 0,
         skybox: !!skyboxUrl,
         narration: !!narrationUrl,
+        narrationError: narrationError || undefined,
       }
     });
     
