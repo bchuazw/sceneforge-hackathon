@@ -93,22 +93,32 @@ export async function checkNamespace() {
 }
 
 // List all scenes from turbopuffer (for gallery)
-export async function listAllScenes(limit: number = 100) {
+// Uses cursor-based pagination to retrieve all vectors, not just the first page.
+export async function listAllScenes(limit: number = 200) {
   try {
     const ns = getNamespace();
-    // Use export() to list all vectors without needing a query vector
-    // This is the correct way to get all records from turbopuffer
-    const { vectors } = await ns.export({});
-    
+    const allVectors: any[] = [];
+    let cursor: string | undefined = undefined;
+
+    // Paginate through all results using the cursor returned by each export call
+    do {
+      const result: any = await ns.export(cursor ? { cursor } : {});
+      const batch: any[] = result.vectors || [];
+      allVectors.push(...batch);
+      cursor = result.next_cursor ?? result.cursor ?? undefined;
+      // Stop if we've collected enough or there's no next page
+      if (allVectors.length >= limit || !cursor) break;
+    } while (cursor);
+
     // Sort by created_at (newest first) and apply limit
-    const sortedVectors = vectors
+    const sortedVectors = allVectors
       .sort((a: any, b: any) => {
         const dateA = new Date(a.attributes?.created_at || 0).getTime();
         const dateB = new Date(b.attributes?.created_at || 0).getTime();
         return dateB - dateA;
       })
       .slice(0, limit);
-    
+
     return sortedVectors.map((r: any) => ({
       id: r.id,
       ...r.attributes,
