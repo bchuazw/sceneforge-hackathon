@@ -15,17 +15,27 @@ function getOpenAI(): OpenAI {
 }
 
 export async function parseSceneDescription(prompt: string): Promise<any> {
-  const systemPrompt = `You are a senior game-scene director. Convert a short natural-language description into a richly detailed, playable 3D scene.
+  const systemPrompt = `You are a senior game-scene director. Convert a short natural-language description into a richly detailed, playable 3D scene that renders as a stylized low-poly game world.
 
 Return VALID JSON only, no markdown, no explanations.
 
 Design principles — take decisive creative liberty:
-- Populate richly. A "forest" should have 8-15 trees at varied positions, not 2. A "city street" should have multiple buildings, lamps, vehicles, debris. Err on the side of MORE detail, not less.
-- Spread objects across the XZ plane in natural clusters (positions roughly in the range [-30, 30] for X and Z; Y is ground level 0 unless floating).
-- Vary scales (0.5 – 3.0) so the scene looks organic, not gridded.
-- Add "procedural_layers": at least 3 distinct passes that describe how a renderer should layer detail (e.g. ground texture, weather particles, ambient fog, distant silhouettes, foreground props). Be opinionated — if a muddy road would look better with 8 procedural layers, say so.
+- Populate DENSELY. Produce 25-40 objects per scene. A "forest" needs many trees, undergrowth, rocks, mushrooms, fallen logs. A "city street" needs buildings, lamps, vehicles, signs, food carts, debris. Empty scenes are a failure.
+- Spread objects across the XZ plane in natural clusters (positions roughly in the range [-35, 35] for X and Z; Y is ground level 0 unless the object is meant to float/fly).
+- Vary scales (0.5 – 3.0) so the scene looks organic, not gridded. Cluster similar objects (groves of trees, rows of buildings, grandstand sections).
+- ALWAYS set "properties.type" to a specific asset keyword from the vocabulary below so the renderer picks the right stylized model. A generic "prop" with no subtype renders as a gray box.
+- Add "procedural_layers": at least 3 distinct passes that describe how a renderer should layer detail (ground texture, weather particles, ambient fog, distant silhouettes, foreground props).
 - Audio zones should feel placed: 1 ambient bed + 2-4 positional SFX that match visible objects.
 - Narration: write a 2-3 sentence cinematic description of the scene in second person ("You find yourself...") that a TTS engine will speak when the scene loads.
+
+Asset vocabulary for "type" and "properties.type" (pick the closest match — the renderer has specific low-poly models for each):
+- Nature: pine_tree, broad_tree, tree, rock, boulder, grass, bush, mushroom, crystal, flower, log
+- Structures: cottage, building, tower, ruin, fence, grandstand, bridge, wall
+- Sci-fi/urban: hologram, neon_sign, lamp_post, street_light, barrel, food_cart, antenna
+- Vehicles: race_car, rover, hover_car, spacecraft
+- Characters: character, astronaut, spirit, creature
+- Racing: flag, cone, tire_stack, checkpoint
+- Lights: light (use properties.color and properties.intensity)
 
 Schema:
 {
@@ -35,7 +45,7 @@ Schema:
   "time": "day|night|sunset|dawn",
   "narration": "string (2-3 sentence cinematic intro, second person)",
   "objects": [
-    { "type": "tree|rock|building|vehicle|character|prop|light", "position": [x, y, z], "scale": number, "properties": {} }
+    { "type": "<asset keyword>", "position": [x, y, z], "scale": number, "properties": { "type": "<specific asset subtype>", "color": "#hex (optional)" } }
   ],
   "procedural_layers": [
     { "name": "string", "description": "string (what this layer adds and why it improves the scene)" }
@@ -63,7 +73,7 @@ Schema:
         { role: 'user', content: prompt }
       ],
       temperature: 0.8,
-      max_tokens: 3000,
+      max_tokens: 6000,
       response_format: { type: 'json_object' },
     });
 

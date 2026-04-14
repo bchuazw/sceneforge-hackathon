@@ -1,21 +1,24 @@
 'use client';
 
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { 
-  Stars, 
-  Cloud, 
-  Environment, 
-  Float, 
-  ContactShadows,
+import {
+  Stars,
+  Cloud,
+  Environment,
+  Float,
   Sparkles,
-  useTexture,
-  Trail,
   PerspectiveCamera,
-  Lightformer
 } from '@react-three/drei';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
-import { EffectComposer, Bloom, Vignette, ToneMapping } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
+
+interface GameObject {
+  type: string;
+  position: [number, number, number];
+  scale: number;
+  properties?: Record<string, any>;
+}
 
 interface GameRendererProps {
   sceneData: {
@@ -23,264 +26,871 @@ interface GameRendererProps {
     theme: string;
     mood: string;
     time: string;
-    objects: Array<{
-      type: string;
-      position: [number, number, number];
-      scale: number;
-      properties?: Record<string, any>;
-    }>;
-    lighting: {
-      type: string;
-      intensity: number;
-      color: string;
-    };
+    objects: GameObject[];
+    lighting: { type: string; intensity: number; color: string };
     audio_zones?: Array<{
       type: string;
       sound: string;
       position?: [number, number, number];
       volume: number;
     }>;
-    gameplay?: {
-      type: string;
-      camera: string;
-    };
+    gameplay?: { type: string; camera: string };
   };
-  audioFiles?: Array<{
-    type: string;
-    name: string;
-    url: string;
-  }>;
+  audioFiles?: Array<{ type: string; name: string; url: string }>;
   skyboxUrl?: string;
 }
 
-// Theme-based environment presets
-const environmentPresets: Record<string, any> = {
-  forest: 'forest',
-  city: 'city',
-  nature: 'forest',
-  adventure: 'sunset',
-  fantasy: 'sunset',
-  sunset: 'sunset',
-  desert: 'dawn',
-  racing: 'dawn',
-  scifi: 'night',
-  cyberpunk: 'night',
-  horror: 'night',
-  space: 'night',
-  underwater: 'lobby',
-  default: 'sunset',
+// ──────────────────────────────────────────────────────────────────────────
+// Palette + subtype resolution
+// ──────────────────────────────────────────────────────────────────────────
+
+const themePalette = (theme: string) => {
+  switch (theme) {
+    case 'racing':
+      return { ground: '#2a2a2a', accent: '#ff2200', fog: '#453c3a', sky: '#7b6c5e' };
+    case 'cyberpunk':
+      return { ground: '#0b0e1a', accent: '#00ffff', fog: '#120a2a', sky: '#0a0a1a' };
+    case 'scifi':
+      return { ground: '#5c2b24', accent: '#ff6b4a', fog: '#3a1810', sky: '#4a1a10' };
+    case 'horror':
+      return { ground: '#15100e', accent: '#ff3344', fog: '#0a0505', sky: '#120806' };
+    case 'fantasy':
+      return { ground: '#3c6b30', accent: '#f0c674', fog: '#7a6090', sky: '#a070c0' };
+    case 'forest':
+    case 'nature':
+      return { ground: '#2d5a2d', accent: '#ffeb66', fog: '#9ebfa8', sky: '#cfe0cb' };
+    case 'desert':
+      return { ground: '#c4a35a', accent: '#ffbb55', fog: '#e6c98a', sky: '#f5e4b3' };
+    case 'space':
+      return { ground: '#0a0a18', accent: '#ffffff', fog: '#000000', sky: '#000000' };
+    case 'adventure':
+      return { ground: '#3a5a3a', accent: '#ffcc66', fog: '#a0b8c4', sky: '#87ceeb' };
+    default:
+      return { ground: '#3a5a3a', accent: '#ffcc66', fog: '#a0b8c4', sky: '#87ceeb' };
+  }
 };
 
-// Material configurations based on object type and theme
-const getMaterialConfig = (type: string, theme: string) => {
-  const configs: Record<string, Record<string, any>> = {
-    tree: {
-      roughness: 0.9,
-      metalness: 0.0,
-      color: '#2d5a27',
-      emissive: '#0a1f08',
-      emissiveIntensity: 0.1,
-    },
-    rock: {
-      roughness: 0.95,
-      metalness: 0.1,
-      color: '#6b6b6b',
-      ior: 1.5,
-    },
-    building: {
-      roughness: 0.7,
-      metalness: 0.2,
-      color: '#8B7355',
-    },
-    vehicle: {
-      roughness: 0.2,
-      metalness: 0.8,
-      color: '#4f46e5',
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
-    },
-    character: {
-      roughness: 0.5,
-      metalness: 0.1,
-      color: '#f59e0b',
-    },
-    prop: {
-      roughness: 0.6,
-      metalness: 0.3,
-      color: '#a855f7',
-    },
-  };
+// Normalize a raw type + properties.type to one of our known renderers.
+// GPT-4o often puts the real asset kind in properties.type (e.g. "street food vendor").
+function resolveSubtype(obj: GameObject): string {
+  const raw = (obj.type || '').toLowerCase();
+  const sub = String(obj.properties?.type || '').toLowerCase();
+  const combined = (sub + ' ' + raw).trim();
 
-  // Theme overrides
-  if (theme === 'cyberpunk') {
-    if (type === 'building') return { ...configs.building, emissive: '#00ffff', emissiveIntensity: 0.3 };
-    if (type === 'vehicle') return { ...configs.vehicle, emissive: '#ff00ff', emissiveIntensity: 0.4 };
-  }
-  if (theme === 'horror') {
-    return { ...configs[type] || configs.prop, color: '#3a2525', emissive: '#ff0000', emissiveIntensity: 0.1 };
-  }
-  if (theme === 'racing') {
-    if (type === 'vehicle') return { ...configs.vehicle, color: '#ff2200', clearcoat: 1.0, clearcoatRoughness: 0.05 };
-    if (type === 'building') return { ...configs.building, color: '#cccccc', metalness: 0.4 };
-  }
-  if (theme === 'scifi') {
-    if (type === 'building') return { ...configs.building, color: '#334455', emissive: '#0088ff', emissiveIntensity: 0.2 };
-    if (type === 'vehicle') return { ...configs.vehicle, color: '#223344', emissive: '#00ffcc', emissiveIntensity: 0.3 };
-  }
-  if (theme === 'fantasy') {
-    if (type === 'building') return { ...configs.building, color: '#7a5c3c', metalness: 0.0 };
-    if (type === 'character') return { ...configs.character, color: '#c0a060', metalness: 0.5 };
-  }
+  if (/mushroom|fungus|toadstool/.test(combined)) return 'mushroom';
+  if (/crystal|shard|gem/.test(combined)) return 'crystal';
+  if (/hologram|holo|dragon|spirit|ghost/.test(combined)) return 'hologram';
+  if (/neon|billboard|sign/.test(combined)) return 'neon_sign';
+  if (/lamp|lantern|street.?light|torch/.test(combined)) return 'lamp_post';
+  if (/astronaut|cosmonaut|spacesuit/.test(combined)) return 'astronaut';
+  if (/rover|hover|police car|hoverbike|craft|thruster|ship|lander|spaceship/.test(combined))
+    return 'rover';
+  if (/race.?car|nascar|sports.?car|stock.?car/.test(combined)) return 'race_car';
+  if (/grandstand|bleacher|stand|stadium/.test(combined)) return 'grandstand';
+  if (/cottage|cabin|hut|dwelling/.test(combined)) return 'cottage';
+  if (/ruin|pillar|column|stone.?arch|monument|obelisk/.test(combined)) return 'ruin';
+  if (/fence|barrier|railing/.test(combined)) return 'fence';
+  if (/flag|banner|pennant/.test(combined)) return 'flag';
+  if (/food.?vendor|food.?cart|stall|market/.test(combined)) return 'food_cart';
+  if (/firefly|spark|ember/.test(combined)) return 'firefly';
+  if (/barrel|crate|box|container/.test(combined)) return 'barrel';
+  if (/pine|fir|conifer|spruce/.test(combined)) return 'pine_tree';
+  if (/tree|bush|shrub|sapling/.test(combined)) return 'tree';
+  if (/rock|boulder|stone/.test(combined)) return 'rock';
+  if (/grass|fern|plant|foliage/.test(combined)) return 'grass_clump';
+  if (/vehicle|car|truck/.test(combined)) return 'race_car';
+  if (/building|skyscraper|tower|structure/.test(combined)) return 'building';
+  if (/character|npc|person|human|knight|warrior/.test(combined)) return 'character';
+  if (raw === 'light') return 'lamp_post';
+  if (raw === 'prop') return 'barrel';
+  return raw || 'barrel';
+}
 
-  return configs[type] || configs.prop;
-};
+// ──────────────────────────────────────────────────────────────────────────
+// Reusable low-poly asset renderers (kept as plain functions → one tree)
+// ──────────────────────────────────────────────────────────────────────────
 
-// Particle effects based on theme/mood
-function ParticleEffects({ theme, mood, isDayTime }: { theme: string; mood: string; isDayTime: boolean }) {
-  const particlesRef = useRef<THREE.Points>(null);
-  
-  const particleConfig = useMemo(() => {
-    switch (theme) {
-      case 'forest':
-        return {
-          count: 100,
-          color: '#ffff00',
-          size: 0.05,
-          speed: 0.2,
-          type: 'fireflies',
-        };
-      case 'cyberpunk':
-        return {
-          count: 200,
-          color: '#00ffff',
-          size: 0.02,
-          speed: 0.8,
-          type: 'neon',
-        };
-      case 'scifi':
-        return {
-          count: 150,
-          color: '#00ffcc',
-          size: 0.03,
-          speed: 1.0,
-          type: 'neon',
-        };
-      case 'space':
-        return {
-          count: 300,
-          color: '#ffffff',
-          size: 0.03,
-          speed: 0.1,
-          type: 'stars',
-        };
-      case 'horror':
-        return {
-          count: 50,
-          color: '#ff0000',
-          size: 0.08,
-          speed: 0.3,
-          type: 'fog',
-        };
-      default:
-        return {
-          count: isDayTime ? 0 : 50,
-          color: '#ffffff',
-          size: 0.04,
-          speed: 0.4,
-          type: 'fireflies',
-        };
-    }
-  }, [theme, isDayTime]);
-
-  const positions = useMemo(() => {
-    const pos = new Float32Array(particleConfig.count * 3);
-    for (let i = 0; i < particleConfig.count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 50;
-      pos[i * 3 + 1] = Math.random() * 10 + 1;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 50;
-    }
-    return pos;
-  }, [particleConfig.count]);
-
-  useFrame((state) => {
-    if (!particlesRef.current) return;
-    const positions = particlesRef.current.geometry.attributes.position.array as Float32Array;
-    
-    for (let i = 0; i < particleConfig.count; i++) {
-      const i3 = i * 3;
-      positions[i3 + 1] += Math.sin(state.clock.elapsedTime * particleConfig.speed + i) * 0.01;
-      
-      if (particleConfig.type === 'neon') {
-        positions[i3] += Math.cos(state.clock.elapsedTime * 0.5 + i) * 0.02;
-      }
-    }
-    
-    particlesRef.current.geometry.attributes.position.needsUpdate = true;
-  });
-
-  if (particleConfig.count === 0) return null;
-
+function PineTree({ position, scale = 1, variant = 0 }: { position: [number, number, number]; scale?: number; variant?: number }) {
+  const green = ['#2d6d3a', '#3a7a45', '#265a2c', '#468f52'][variant % 4];
   return (
-    <points ref={particlesRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particleConfig.count}
-          array={positions}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        size={particleConfig.size}
-        color={particleConfig.color}
-        transparent
-        opacity={0.8}
-        sizeAttenuation
-      />
-    </points>
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.6, 0]} castShadow>
+        <cylinderGeometry args={[0.18, 0.28, 1.2, 6]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={1} />
+      </mesh>
+      <mesh position={[0, 1.6, 0]} castShadow>
+        <coneGeometry args={[1.05, 1.8, 7]} />
+        <meshStandardMaterial color={green} roughness={1} flatShading />
+      </mesh>
+      <mesh position={[0, 2.6, 0]} castShadow>
+        <coneGeometry args={[0.75, 1.3, 7]} />
+        <meshStandardMaterial color={green} roughness={1} flatShading />
+      </mesh>
+      <mesh position={[0, 3.4, 0]} castShadow>
+        <coneGeometry args={[0.45, 0.9, 7]} />
+        <meshStandardMaterial color={green} roughness={1} flatShading />
+      </mesh>
+    </group>
   );
 }
 
-// Rain effect for stormy/cyberpunk themes
-function RainEffect({ enabled }: { enabled: boolean }) {
-  if (!enabled) return null;
-  
+function BroadTree({ position, scale = 1, theme = 'default' }: { position: [number, number, number]; scale?: number; theme?: string }) {
+  const leafColor =
+    theme === 'fantasy' ? '#b95dbb' : theme === 'desert' ? '#7ba25a' : '#3a7a45';
   return (
-    <Sparkles
-      count={1000}
-      scale={[50, 20, 50]}
-      size={0.05}
-      speed={4}
-      color="#88ccff"
-      opacity={0.6}
-    />
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.75, 0]} castShadow>
+        <cylinderGeometry args={[0.22, 0.32, 1.5, 6]} />
+        <meshStandardMaterial color="#5b3e24" roughness={1} />
+      </mesh>
+      <mesh position={[0, 2.0, 0]} castShadow>
+        <icosahedronGeometry args={[1.05, 0]} />
+        <meshStandardMaterial color={leafColor} roughness={1} flatShading />
+      </mesh>
+      <mesh position={[-0.5, 1.8, 0.4]} castShadow>
+        <icosahedronGeometry args={[0.55, 0]} />
+        <meshStandardMaterial color={leafColor} roughness={1} flatShading />
+      </mesh>
+      <mesh position={[0.6, 1.9, -0.3]} castShadow>
+        <icosahedronGeometry args={[0.65, 0]} />
+        <meshStandardMaterial color={leafColor} roughness={1} flatShading />
+      </mesh>
+    </group>
   );
 }
 
-// Heat shimmer for desert
-function HeatShimmer({ enabled }: { enabled: boolean }) {
-  const groupRef = useRef<THREE.Group>(null);
-  
-  useFrame((state) => {
-    if (!groupRef.current || !enabled) return;
-    groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.1;
-  });
-  
-  if (!enabled) return null;
-  
+function Rock({ position, scale = 1, theme = 'default' }: { position: [number, number, number]; scale?: number; theme?: string }) {
+  const col = theme === 'scifi' ? '#884a3a' : theme === 'desert' ? '#b08050' : '#7a7a7a';
   return (
-    <group ref={groupRef}>
-      {Array.from({ length: 20 }).map((_, i) => (
-        <Float key={i} speed={2} rotationIntensity={0.1} floatIntensity={0.2}>
-          <mesh position={[(Math.random() - 0.5) * 40, Math.random() * 5, (Math.random() - 0.5) * 40]}>
-            <planeGeometry args={[0.5, 0.5]} />
-            <meshBasicMaterial color="#ffaa44" transparent opacity={0.1} />
+    <group position={position} scale={scale}>
+      <mesh castShadow receiveShadow>
+        <dodecahedronGeometry args={[0.55, 0]} />
+        <meshStandardMaterial color={col} roughness={1} flatShading />
+      </mesh>
+      <mesh position={[0.3, -0.15, 0.25]} castShadow receiveShadow>
+        <dodecahedronGeometry args={[0.25, 0]} />
+        <meshStandardMaterial color={col} roughness={1} flatShading />
+      </mesh>
+    </group>
+  );
+}
+
+function GrassClump({ position, scale = 1, color = '#4fa554' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  return (
+    <group position={position} scale={scale}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const a = (i / 5) * Math.PI * 2;
+        const r = 0.1;
+        return (
+          <mesh key={i} position={[Math.cos(a) * r, 0.15, Math.sin(a) * r]} rotation={[0, a, 0]}>
+            <coneGeometry args={[0.06, 0.4, 4]} />
+            <meshStandardMaterial color={color} flatShading />
           </mesh>
-        </Float>
+        );
+      })}
+    </group>
+  );
+}
+
+function Mushroom({ position, scale = 1, variant = 0 }: { position: [number, number, number]; scale?: number; variant?: number }) {
+  const caps = ['#d43f3f', '#c266c4', '#d07a34', '#3ec0c0'];
+  const cap = caps[variant % caps.length];
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <cylinderGeometry args={[0.18, 0.22, 0.5, 10]} />
+        <meshStandardMaterial color="#f5ecd7" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.65, 0]} castShadow>
+        <sphereGeometry args={[0.5, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color={cap} roughness={0.7} emissive={cap} emissiveIntensity={0.15} />
+      </mesh>
+      {/* spots */}
+      {[[0.25, 0.72, 0.1], [-0.2, 0.7, -0.15], [0.1, 0.8, 0.2]].map((p, i) => (
+        <mesh key={i} position={p as any}>
+          <sphereGeometry args={[0.08, 8, 6]} />
+          <meshStandardMaterial color="#f5ecd7" roughness={1} />
+        </mesh>
       ))}
     </group>
   );
 }
+
+function Crystal({ position, scale = 1, color = '#8df5ff' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <octahedronGeometry args={[0.7, 0]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.6}
+          roughness={0.2}
+          metalness={0.1}
+          transparent
+          opacity={0.85}
+          flatShading
+        />
+      </mesh>
+      <mesh position={[0.3, 0.4, 0.2]} castShadow>
+        <octahedronGeometry args={[0.3, 0]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} transparent opacity={0.8} flatShading />
+      </mesh>
+      <pointLight color={color} intensity={0.6} distance={4} />
+    </group>
+  );
+}
+
+function Hologram({ position, scale = 1, color = '#66ffff' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  const groupRef = useRef<THREE.Group>(null);
+  useFrame((s) => {
+    if (groupRef.current) groupRef.current.rotation.y = s.clock.elapsedTime * 0.4;
+  });
+  return (
+    <group ref={groupRef} position={position} scale={scale}>
+      {/* glowing core */}
+      <mesh position={[0, 2.2, 0]}>
+        <icosahedronGeometry args={[0.9, 0]} />
+        <meshBasicMaterial color={color} transparent opacity={0.55} wireframe />
+      </mesh>
+      <mesh position={[0, 2.2, 0]}>
+        <sphereGeometry args={[0.35, 16, 12]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+      {/* base rings */}
+      {[0.2, 0.45].map((y, i) => (
+        <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.7 - i * 0.15, 0.03, 6, 24]} />
+          <meshBasicMaterial color={color} transparent opacity={0.7} />
+        </mesh>
+      ))}
+      <pointLight color={color} intensity={1.2} distance={6} />
+    </group>
+  );
+}
+
+function NeonSign({ position, scale = 1, color = '#ff55aa' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  return (
+    <group position={position} scale={scale}>
+      {/* post */}
+      <mesh position={[0, 1.5, 0]} castShadow>
+        <cylinderGeometry args={[0.08, 0.08, 3, 6]} />
+        <meshStandardMaterial color="#222" roughness={0.9} />
+      </mesh>
+      {/* sign */}
+      <mesh position={[0.7, 2.7, 0]} castShadow>
+        <boxGeometry args={[1.4, 0.8, 0.1]} />
+        <meshStandardMaterial color="#0d0d12" roughness={0.8} />
+      </mesh>
+      <mesh position={[0.7, 2.7, 0.06]}>
+        <planeGeometry args={[1.3, 0.7]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+      <pointLight position={[0.7, 2.7, 0.4]} color={color} intensity={1.5} distance={5} />
+    </group>
+  );
+}
+
+function LampPost({ position, scale = 1, color = '#ffc966' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 1.5, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.1, 3, 6]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.8} metalness={0.4} />
+      </mesh>
+      <mesh position={[0, 3.05, 0]}>
+        <icosahedronGeometry args={[0.2, 0]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
+      </mesh>
+      <pointLight position={[0, 3.05, 0]} color={color} intensity={0.9} distance={8} decay={2} />
+    </group>
+  );
+}
+
+function Cottage({ position, scale = 1, theme = 'default' }: { position: [number, number, number]; scale?: number; theme?: string }) {
+  const wall = theme === 'fantasy' ? '#b89870' : '#d9c08a';
+  const roof = theme === 'fantasy' ? '#6b2d2d' : '#8a3a2a';
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.6, 0]} castShadow receiveShadow>
+        <boxGeometry args={[2, 1.2, 1.6]} />
+        <meshStandardMaterial color={wall} roughness={1} />
+      </mesh>
+      {/* roof */}
+      <mesh position={[0, 1.55, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[1.6, 0.9, 4]} />
+        <meshStandardMaterial color={roof} roughness={0.9} flatShading />
+      </mesh>
+      {/* door */}
+      <mesh position={[0, 0.4, 0.81]}>
+        <planeGeometry args={[0.4, 0.8]} />
+        <meshStandardMaterial color="#3a2a1a" />
+      </mesh>
+      {/* windows */}
+      {[-0.6, 0.6].map((x) => (
+        <mesh key={x} position={[x, 0.7, 0.81]}>
+          <planeGeometry args={[0.3, 0.3]} />
+          <meshBasicMaterial color="#ffd88a" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Building({ position, scale = 1, theme = 'default' }: { position: [number, number, number]; scale?: number; theme?: string }) {
+  const palette = themePalette(theme);
+  const isCyber = theme === 'cyberpunk' || theme === 'scifi';
+  const base = isCyber ? '#1e2438' : '#c8b99a';
+  const accent = isCyber ? palette.accent : '#ffd88a';
+  const h = 3 + (Math.abs(Math.sin(position[0] * 0.7 + position[2] * 0.3)) * 4); // procedural height based on pos
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, h / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.8, h, 1.8]} />
+        <meshStandardMaterial color={base} roughness={0.7} metalness={isCyber ? 0.2 : 0} />
+      </mesh>
+      {/* window grid rows */}
+      {Array.from({ length: Math.floor(h / 0.6) }).map((_, i) => (
+        <group key={i} position={[0, 0.5 + i * 0.7, 0]}>
+          {[-0.5, 0.5].map((side) => (
+            <mesh key={side} position={[side > 0 ? 0.91 : -0.91, 0, 0]} rotation={[0, side > 0 ? 0 : Math.PI, 0]}>
+              <planeGeometry args={[1.4, 0.35]} />
+              <meshBasicMaterial color={accent} />
+            </mesh>
+          ))}
+          {[-0.5, 0.5].map((side) => (
+            <mesh key={'z' + side} position={[0, 0, side > 0 ? 0.91 : -0.91]} rotation={[0, side > 0 ? Math.PI / 2 : -Math.PI / 2, 0]}>
+              <planeGeometry args={[1.4, 0.35]} />
+              <meshBasicMaterial color={accent} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      {/* roof detail */}
+      <mesh position={[0, h + 0.2, 0]}>
+        <boxGeometry args={[0.4, 0.4, 0.4]} />
+        <meshStandardMaterial color="#333" />
+      </mesh>
+    </group>
+  );
+}
+
+function RaceCar({ position, scale = 1, color = '#e63946' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  return (
+    <group position={position} scale={scale}>
+      {/* chassis */}
+      <mesh position={[0, 0.28, 0]} castShadow>
+        <boxGeometry args={[1.1, 0.34, 2.4]} />
+        <meshStandardMaterial color={color} roughness={0.25} metalness={0.7} />
+      </mesh>
+      {/* cabin */}
+      <mesh position={[0, 0.62, -0.15]} castShadow>
+        <boxGeometry args={[0.85, 0.35, 1.1]} />
+        <meshStandardMaterial color="#0a0a14" roughness={0.1} metalness={0.9} />
+      </mesh>
+      {/* windshield tint */}
+      <mesh position={[0, 0.62, 0.35]} rotation={[-0.35, 0, 0]}>
+        <planeGeometry args={[0.82, 0.35]} />
+        <meshStandardMaterial color="#6cc7ff" roughness={0.05} metalness={0.9} transparent opacity={0.6} />
+      </mesh>
+      {/* rear spoiler */}
+      <mesh position={[0, 0.7, -1.1]}>
+        <boxGeometry args={[1.2, 0.08, 0.25]} />
+        <meshStandardMaterial color="#111" />
+      </mesh>
+      {/* number circle */}
+      <mesh position={[0, 0.62, -0.8]} rotation={[0, Math.PI, 0]}>
+        <circleGeometry args={[0.2, 16]} />
+        <meshBasicMaterial color="#ffffff" />
+      </mesh>
+      {/* wheels */}
+      {[
+        [-0.58, 0.2, 0.85],
+        [0.58, 0.2, 0.85],
+        [-0.58, 0.2, -0.85],
+        [0.58, 0.2, -0.85],
+      ].map((p, i) => (
+        <group key={i} position={p as any}>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.28, 0.28, 0.22, 14]} />
+            <meshStandardMaterial color="#0a0a0a" roughness={0.8} />
+          </mesh>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.14, 0.14, 0.23, 10]} />
+            <meshStandardMaterial color="#cccccc" metalness={0.9} roughness={0.3} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function Rover({ position, scale = 1, color = '#1c6dc5' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  return (
+    <group position={position} scale={scale}>
+      {/* base */}
+      <mesh position={[0, 0.4, 0]} castShadow>
+        <boxGeometry args={[1.2, 0.3, 1.8]} />
+        <meshStandardMaterial color={color} metalness={0.6} roughness={0.3} />
+      </mesh>
+      {/* dome */}
+      <mesh position={[0, 0.85, 0]} castShadow>
+        <sphereGeometry args={[0.55, 16, 10]} />
+        <meshStandardMaterial color="#a8d8ff" transparent opacity={0.5} roughness={0.05} metalness={0.9} />
+      </mesh>
+      {/* thrusters */}
+      {[-0.5, 0.5].map((x) => (
+        <mesh key={x} position={[x, 0.5, -1.05]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.14, 0.18, 0.3, 10]} />
+          <meshStandardMaterial color="#666" metalness={0.8} roughness={0.3} />
+        </mesh>
+      ))}
+      {/* glow */}
+      <pointLight position={[0, 0.5, -1.1]} color="#00ccff" intensity={1.2} distance={4} />
+      {/* wheels */}
+      {[
+        [-0.6, 0.2, 0.65],
+        [0.6, 0.2, 0.65],
+        [-0.6, 0.2, -0.65],
+        [0.6, 0.2, -0.65],
+      ].map((p, i) => (
+        <mesh key={i} position={p as any} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.2, 12]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Astronaut({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.6, 0]} castShadow>
+        <capsuleGeometry args={[0.28, 0.6, 6, 10]} />
+        <meshStandardMaterial color="#e8e8ee" roughness={0.4} metalness={0.25} />
+      </mesh>
+      <mesh position={[0, 1.25, 0]} castShadow>
+        <sphereGeometry args={[0.26, 14, 10]} />
+        <meshStandardMaterial color="#e8e8ee" roughness={0.3} metalness={0.3} />
+      </mesh>
+      <mesh position={[0, 1.25, 0.19]}>
+        <sphereGeometry args={[0.19, 14, 10]} />
+        <meshStandardMaterial color="#0a1a3a" metalness={1} roughness={0.05} />
+      </mesh>
+      {/* backpack */}
+      <mesh position={[0, 0.7, -0.28]} castShadow>
+        <boxGeometry args={[0.45, 0.55, 0.25]} />
+        <meshStandardMaterial color="#aaaaae" />
+      </mesh>
+      {/* arms */}
+      {[-0.38, 0.38].map((x) => (
+        <mesh key={x} position={[x, 0.7, 0]} castShadow>
+          <capsuleGeometry args={[0.09, 0.4, 4, 8]} />
+          <meshStandardMaterial color="#e8e8ee" />
+        </mesh>
+      ))}
+      {/* legs */}
+      {[-0.14, 0.14].map((x) => (
+        <mesh key={x} position={[x, 0.15, 0]} castShadow>
+          <capsuleGeometry args={[0.11, 0.3, 4, 8]} />
+          <meshStandardMaterial color="#d6d6dc" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Character({ position, scale = 1, theme = 'default' }: { position: [number, number, number]; scale?: number; theme?: string }) {
+  const body = theme === 'cyberpunk' ? '#9f00ff' : theme === 'horror' ? '#331a1a' : '#3a6fe8';
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.55, 0]} castShadow>
+        <capsuleGeometry args={[0.24, 0.65, 4, 10]} />
+        <meshStandardMaterial color={body} roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 1.2, 0]} castShadow>
+        <sphereGeometry args={[0.22, 14, 10]} />
+        <meshStandardMaterial color="#f5c8a8" />
+      </mesh>
+      {[-0.32, 0.32].map((x) => (
+        <mesh key={x} position={[x, 0.65, 0]} castShadow>
+          <capsuleGeometry args={[0.08, 0.4, 4, 8]} />
+          <meshStandardMaterial color={body} />
+        </mesh>
+      ))}
+      {[-0.12, 0.12].map((x) => (
+        <mesh key={x} position={[x, 0.15, 0]} castShadow>
+          <capsuleGeometry args={[0.1, 0.3, 4, 8]} />
+          <meshStandardMaterial color="#1a1a24" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Grandstand({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <mesh key={i} position={[0, 0.2 + i * 0.3, -i * 0.4]} castShadow>
+          <boxGeometry args={[4, 0.25, 0.4]} />
+          <meshStandardMaterial color={i % 2 === 0 ? '#dd3333' : '#ffffff'} roughness={0.8} />
+        </mesh>
+      ))}
+      {/* backing */}
+      <mesh position={[0, 0.9, -2.1]} castShadow>
+        <boxGeometry args={[4.2, 1.8, 0.2]} />
+        <meshStandardMaterial color="#222222" />
+      </mesh>
+    </group>
+  );
+}
+
+function Ruin({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      {[-0.8, 0.8].map((x) => (
+        <mesh key={x} position={[x, 0.9, 0]} castShadow>
+          <cylinderGeometry args={[0.2, 0.25, 1.8, 8]} />
+          <meshStandardMaterial color="#a8a090" roughness={1} flatShading />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.9, 0]} castShadow>
+        <boxGeometry args={[2, 0.2, 0.4]} />
+        <meshStandardMaterial color="#a8a090" roughness={1} flatShading />
+      </mesh>
+      {/* scattered chunks */}
+      <mesh position={[1, 0.2, 0.8]} rotation={[0.3, 0.5, 0]} castShadow>
+        <boxGeometry args={[0.5, 0.4, 0.3]} />
+        <meshStandardMaterial color="#8c8474" roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function Fence({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      {[-0.9, -0.3, 0.3, 0.9].map((x) => (
+        <mesh key={x} position={[x, 0.4, 0]} castShadow>
+          <boxGeometry args={[0.08, 0.8, 0.08]} />
+          <meshStandardMaterial color="#6b4a2a" roughness={1} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.65, 0]}>
+        <boxGeometry args={[1.9, 0.06, 0.05]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.3, 0]}>
+        <boxGeometry args={[1.9, 0.06, 0.05]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function Flag({ position, scale = 1, color = '#ee3344' }: { position: [number, number, number]; scale?: number; color?: string }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((s) => {
+    if (ref.current) (ref.current.material as THREE.MeshStandardMaterial).color.setHSL(((s.clock.elapsedTime * 0.05) % 1), 0.7, 0.5);
+  });
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 1.25, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.05, 2.5, 6]} />
+        <meshStandardMaterial color="#e0e0e0" metalness={0.7} />
+      </mesh>
+      <mesh position={[0.45, 2.1, 0]}>
+        <planeGeometry args={[0.9, 0.6]} />
+        <meshStandardMaterial color={color} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+function FoodCart({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.5, 0]} castShadow>
+        <boxGeometry args={[1.4, 1, 0.9]} />
+        <meshStandardMaterial color="#b94a4a" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 1.25, 0]} castShadow>
+        <boxGeometry args={[1.6, 0.1, 1.1]} />
+        <meshStandardMaterial color="#e6c87a" roughness={0.8} />
+      </mesh>
+      {/* wheels */}
+      {[-0.55, 0.55].map((x) => (
+        <mesh key={x} position={[x, 0.1, 0.5]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.15, 0.15, 0.12, 10]} />
+          <meshStandardMaterial color="#1a1a1a" />
+        </mesh>
+      ))}
+      {/* steam (billboard) */}
+      <mesh position={[0, 1.7, 0]}>
+        <sphereGeometry args={[0.3, 10, 8]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.25} />
+      </mesh>
+      <pointLight position={[0, 1, 0.5]} color="#ff8844" intensity={0.4} distance={3} />
+    </group>
+  );
+}
+
+function Barrel({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh position={[0, 0.4, 0]} castShadow>
+        <cylinderGeometry args={[0.35, 0.35, 0.8, 14]} />
+        <meshStandardMaterial color="#6b4a2a" roughness={1} />
+      </mesh>
+      {/* bands */}
+      {[0.15, 0.65].map((y) => (
+        <mesh key={y} position={[0, y, 0]}>
+          <torusGeometry args={[0.36, 0.03, 6, 20]} />
+          <meshStandardMaterial color="#3a2a1a" metalness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Per-theme ground + scatter
+// ──────────────────────────────────────────────────────────────────────────
+
+function Ground({ theme, palette }: { theme: string; palette: ReturnType<typeof themePalette> }) {
+  const isRacing = theme === 'racing';
+  const isMars = theme === 'scifi' && palette.ground.toLowerCase().startsWith('#5');
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
+        <planeGeometry args={[300, 300, 1, 1]} />
+        <meshStandardMaterial color={palette.ground} roughness={1} />
+      </mesh>
+      {isRacing && (
+        <group position={[0, -0.98, 0]}>
+          {/* racing track inner strip */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[14, 22, 64]} />
+            <meshStandardMaterial color="#1b1b1b" roughness={1} />
+          </mesh>
+          {/* lane markings */}
+          {Array.from({ length: 40 }).map((_, i) => {
+            const a = (i / 40) * Math.PI * 2;
+            const r = 18;
+            return (
+              <mesh
+                key={i}
+                position={[Math.cos(a) * r, 0.01, Math.sin(a) * r]}
+                rotation={[-Math.PI / 2, 0, -a]}
+              >
+                <planeGeometry args={[1.2, 0.2]} />
+                <meshBasicMaterial color="#ffee55" />
+              </mesh>
+            );
+          })}
+          {/* rumble strip */}
+          {Array.from({ length: 80 }).map((_, i) => {
+            const a = (i / 80) * Math.PI * 2;
+            const r = 14;
+            return (
+              <mesh
+                key={'r' + i}
+                position={[Math.cos(a) * r, 0.02, Math.sin(a) * r]}
+                rotation={[-Math.PI / 2, 0, -a]}
+              >
+                <planeGeometry args={[0.7, 0.6]} />
+                <meshBasicMaterial color={i % 2 === 0 ? '#d93030' : '#ffffff'} />
+              </mesh>
+            );
+          })}
+        </group>
+      )}
+      {isMars && (
+        <Sparkles count={60} scale={[120, 3, 120]} size={1.2} speed={0.3} color="#c97a50" opacity={0.35} />
+      )}
+    </group>
+  );
+}
+
+// Instanced scatter — very cheap density
+function Scatter({
+  theme,
+  count,
+  spread,
+  kind,
+}: {
+  theme: string;
+  count: number;
+  spread: number;
+  kind: 'grass' | 'rock' | 'tree' | 'dust';
+}) {
+  const data = useMemo(() => {
+    const out: Array<{ p: [number, number, number]; r: number; s: number }> = [];
+    let seed = 12345 + count;
+    const rng = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < count; i++) {
+      const angle = rng() * Math.PI * 2;
+      const dist = 6 + rng() * spread;
+      const x = Math.cos(angle) * dist;
+      const z = Math.sin(angle) * dist;
+      out.push({ p: [x, -1, z], r: rng() * Math.PI * 2, s: 0.5 + rng() * 0.9 });
+    }
+    return out;
+  }, [count, spread]);
+
+  if (kind === 'grass') {
+    const color = theme === 'fantasy' ? '#5ab55a' : theme === 'racing' ? '#4a7c3a' : '#4fa554';
+    return (
+      <group>
+        {data.map((d, i) => (
+          <GrassClump key={i} position={d.p} scale={d.s} color={color} />
+        ))}
+      </group>
+    );
+  }
+  if (kind === 'rock') {
+    return (
+      <group>
+        {data.map((d, i) => (
+          <Rock key={i} position={d.p} scale={d.s * 0.7} theme={theme} />
+        ))}
+      </group>
+    );
+  }
+  if (kind === 'tree') {
+    return (
+      <group>
+        {data.map((d, i) => (
+          <PineTree key={i} position={d.p} scale={d.s * 1.1} variant={i % 4} />
+        ))}
+      </group>
+    );
+  }
+  return null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Dispatcher — route a scene object to the right renderer
+// ──────────────────────────────────────────────────────────────────────────
+
+function SceneObject({ obj, theme, sfxFiles, index }: { obj: GameObject; theme: string; sfxFiles: Array<{ name: string; url: string; type: string }>; index: number }) {
+  const [clicked, setClicked] = useState(false);
+  const subtype = resolveSubtype(obj);
+  const scale = obj.scale ?? 1;
+  const pos = obj.position;
+  const propColor =
+    obj.properties?.color ||
+    obj.properties?.light_color ||
+    undefined;
+
+  const handleClick = useCallback(() => {
+    setClicked(true);
+    setTimeout(() => setClicked(false), 180);
+    const sfx = sfxFiles[index % Math.max(1, sfxFiles.length)];
+    if (sfx?.url) {
+      const audio = new Audio(sfx.url);
+      audio.volume = 0.6;
+      audio.play().catch(() => {});
+    }
+  }, [index, sfxFiles]);
+
+  const wrap = (node: JSX.Element) => (
+    <group onClick={handleClick}>{node}</group>
+  );
+
+  switch (subtype) {
+    case 'pine_tree':
+      return wrap(<PineTree position={pos} scale={scale} variant={index} />);
+    case 'tree':
+      return wrap(<BroadTree position={pos} scale={scale} theme={theme} />);
+    case 'rock':
+      return wrap(<Rock position={pos} scale={scale} theme={theme} />);
+    case 'grass_clump':
+      return wrap(<GrassClump position={pos} scale={scale} />);
+    case 'mushroom':
+      return wrap(<Mushroom position={pos} scale={scale} variant={index} />);
+    case 'crystal':
+      return wrap(<Crystal position={pos} scale={scale} color={propColor || '#8df5ff'} />);
+    case 'hologram':
+      return wrap(<Hologram position={pos} scale={scale} color={propColor || '#66ffff'} />);
+    case 'neon_sign':
+      return wrap(<NeonSign position={pos} scale={scale} color={propColor || '#ff55aa'} />);
+    case 'lamp_post':
+      return wrap(<LampPost position={pos} scale={scale} color={propColor || '#ffc966'} />);
+    case 'cottage':
+      return wrap(<Cottage position={pos} scale={scale} theme={theme} />);
+    case 'building':
+      return wrap(<Building position={pos} scale={scale} theme={theme} />);
+    case 'race_car':
+      return wrap(<RaceCar position={pos} scale={scale} color={propColor || ['#e63946', '#ffcc33', '#2b8cff', '#2ed573'][index % 4]} />);
+    case 'rover':
+      return wrap(<Rover position={pos} scale={scale} color={propColor || '#4a7ac5'} />);
+    case 'astronaut':
+      return wrap(<Astronaut position={pos} scale={scale} />);
+    case 'character':
+      return wrap(<Character position={pos} scale={scale} theme={theme} />);
+    case 'grandstand':
+      return wrap(<Grandstand position={pos} scale={scale} />);
+    case 'ruin':
+      return wrap(<Ruin position={pos} scale={scale} />);
+    case 'fence':
+      return wrap(<Fence position={pos} scale={scale} />);
+    case 'flag':
+      return wrap(<Flag position={pos} scale={scale} color={propColor} />);
+    case 'food_cart':
+      return wrap(<FoodCart position={pos} scale={scale} />);
+    case 'firefly':
+      return null; // covered by particle system
+    case 'barrel':
+    default:
+      return wrap(<Barrel position={pos} scale={scale} />);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Lightweight particles (theme-aware, bounded counts for perf)
+// ──────────────────────────────────────────────────────────────────────────
+
+function AmbientParticles({ theme, isDayTime }: { theme: string; isDayTime: boolean }) {
+  const config = useMemo(() => {
+    switch (theme) {
+      case 'fantasy':
+        return { count: 80, color: '#ffdd66', size: 0.25, speed: 0.4 };
+      case 'forest':
+      case 'nature':
+        return { count: 60, color: '#ffee88', size: 0.2, speed: 0.4 };
+      case 'cyberpunk':
+        return { count: 100, color: '#00ffff', size: 0.12, speed: 1.0 };
+      case 'horror':
+        return { count: 30, color: '#ff3344', size: 0.28, speed: 0.3 };
+      case 'scifi':
+        return { count: 50, color: '#ff9c6b', size: 0.2, speed: 0.6 };
+      default:
+        return { count: isDayTime ? 0 : 30, color: '#ffffff', size: 0.2, speed: 0.4 };
+    }
+  }, [theme, isDayTime]);
+
+  if (config.count === 0) return null;
+  return (
+    <Sparkles
+      count={config.count}
+      size={config.size}
+      speed={config.speed}
+      scale={[60, 18, 60]}
+      color={config.color}
+      opacity={0.75}
+    />
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Main component
+// ──────────────────────────────────────────────────────────────────────────
 
 export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameRendererProps) {
   const musicFile = audioFiles?.find((a) => a.type === 'music');
@@ -292,266 +902,160 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
   const [mouseLocked, setMouseLocked] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Start music only after user interaction (pointer lock) to satisfy browser autoplay policy
   useEffect(() => {
     if (mouseLocked && audioRef.current) {
       audioRef.current.play().catch(() => {});
     }
   }, [mouseLocked]);
-  
-  // Detect mobile device
+
   useEffect(() => {
-    const checkMobile = () => {
-      const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
-      const isSmallScreen = window.innerWidth < 768;
-      setIsMobile(isTouchDevice || isSmallScreen);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    const check = () => setIsMobile(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
+
   const [hudVisible, setHudVisible] = useState(false);
-  const [currentlyPlaying, setCurrentlyPlaying] = useState<string>('');
-  
-  // HUD animation on load
   useEffect(() => {
-    const timer = setTimeout(() => setHudVisible(true), 500);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setHudVisible(true), 400);
+    return () => clearTimeout(t);
   }, []);
-  
-  // Set currently playing track
-  useEffect(() => {
-    if (musicFile) {
-      setCurrentlyPlaying(musicFile.name.replace(/\.[^/.]+$/, ''));
+
+  useEffect(() => setIsDayTime(sceneData.time !== 'night'), [sceneData.time]);
+
+  const palette = useMemo(() => themePalette(sceneData.theme), [sceneData.theme]);
+  const objects = sceneData.objects || [];
+
+  // Scatter density by theme
+  const scatter = useMemo(() => {
+    switch (sceneData.theme) {
+      case 'forest':
+      case 'nature':
+      case 'fantasy':
+        return { grass: 160, rock: 20, tree: 22, dust: 0 };
+      case 'racing':
+        return { grass: 80, rock: 0, tree: 12, dust: 0 };
+      case 'desert':
+      case 'scifi':
+        return { grass: 0, rock: 40, tree: 0, dust: 1 };
+      case 'cyberpunk':
+        return { grass: 0, rock: 0, tree: 0, dust: 0 };
+      default:
+        return { grass: 80, rock: 10, tree: 10, dust: 0 };
     }
-  }, [musicFile]);
+  }, [sceneData.theme]);
 
-  // Toggle day/night based on scene time
-  useEffect(() => {
-    setIsDayTime(sceneData.time !== 'night');
-  }, [sceneData.time]);
-
-  const backgroundColor = useMemo(() => {
-    if (sceneData.theme === 'space') return '#000000';
-    if (sceneData.theme === 'horror') return '#1a0505';
-    if (sceneData.theme === 'cyberpunk') return '#0a0a1a';
-    return isDayTime 
-      ? (sceneData.lighting?.color || '#87CEEB')
-      : '#0a0a1a';
-  }, [isDayTime, sceneData.lighting?.color, sceneData.theme]);
-
-  const envPreset = environmentPresets[sceneData.theme] || environmentPresets.default;
-  const showRain = sceneData.mood === 'stormy' || sceneData.theme === 'cyberpunk';
-  const showHeatShimmer = sceneData.theme === 'desert';
+  const bloomIntensity = sceneData.theme === 'cyberpunk' ? 0.9 : sceneData.theme === 'scifi' ? 0.6 : 0.35;
 
   return (
     <div className="w-full h-[100dvh] bg-black relative overflow-hidden touch-none">
-      <Canvas 
-        camera={{ position: [0, 5, 10], fov: isMobile ? 75 : 60 }} 
+      <Canvas
         shadows
+        dpr={[1, 1.5]}
+        camera={{ position: [0, 5, 14], fov: isMobile ? 75 : 62 }}
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
         style={{ touchAction: 'none' }}
       >
-        <color attach="background" args={[backgroundColor]} />
-        <fog 
-          attach="fog" 
-          args={[backgroundColor, sceneData.theme === 'horror' ? 10 : 20, sceneData.theme === 'horror' ? 50 : 100]} 
-        />
-        
-        {/* Environment */}
-        <Environment preset={envPreset} background={false} />
-        
-        {/* Stars for night scenes */}
-        {!isDayTime && sceneData.theme !== 'cyberpunk' && sceneData.theme !== 'horror' && (
-          <Stars 
-            radius={100} 
-            depth={50} 
-            count={5000} 
-            factor={4} 
-            saturation={0} 
-            fade 
-            speed={1}
-          />
+        <color attach="background" args={[isDayTime ? palette.sky : '#0a0a1a']} />
+        <fog attach="fog" args={[palette.fog, 25, 110]} />
+
+        {/* Skybox / environment lighting */}
+        {skyboxUrl ? (
+          <Environment files={skyboxUrl} background={false} />
+        ) : (
+          <Environment preset={isDayTime ? 'sunset' : 'night'} background={false} />
         )}
-        
-        {/* Extra stars for space theme */}
-        {sceneData.theme === 'space' && (
-          <Stars 
-            radius={200} 
-            depth={100} 
-            count={10000} 
-            factor={2} 
-            saturation={0.5} 
-            fade 
-            speed={0.5}
-          />
+
+        {/* Stars only in deep-night themes, fewer than before */}
+        {!isDayTime && sceneData.theme !== 'cyberpunk' && (
+          <Stars radius={120} depth={40} count={1800} factor={3} saturation={0} fade speed={1} />
         )}
-        
-        {/* Clouds for day scenes */}
-        {isDayTime && sceneData.theme !== 'space' && sceneData.theme !== 'underwater' && (
-          <>
-            <Cloud
-              position={[-10, 15, -20]}
-              speed={0.2}
-              opacity={0.8}
-              scale={2}
-              color="#ffffff"
-            />
-            <Cloud
-              position={[15, 12, -15]}
-              speed={0.15}
-              opacity={0.6}
-              scale={1.5}
-              color="#ffffff"
-            />
-            <Cloud
-              position={[0, 18, -30]}
-              speed={0.25}
-              opacity={0.7}
-              scale={3}
-              color="#f0f0f0"
-            />
-          </>
+
+        {/* Daylight clouds — just one */}
+        {isDayTime && sceneData.theme !== 'space' && (
+          <Cloud position={[-10, 18, -30]} speed={0.15} opacity={0.5} scale={2} color="#ffffff" />
         )}
-        
-        {/* Dynamic Lighting */}
-        <ambientLight intensity={isDayTime ? 0.5 : 0.15} color={sceneData.theme === 'horror' ? '#ff4444' : '#ffffff'} />
-        <directionalLight 
-          position={isDayTime ? [10, 20, 10] : [-10, 10, -10]} 
-          intensity={isDayTime ? 1.2 : 0.3}
-          color={isDayTime ? '#fffaf0' : sceneData.theme === 'cyberpunk' ? '#ff00ff' : '#4444ff'}
+
+        {/* Lighting — single shadow-casting directional + soft ambient */}
+        <ambientLight intensity={isDayTime ? 0.55 : 0.2} color={sceneData.theme === 'horror' ? '#ff4444' : '#ffffff'} />
+        <directionalLight
+          position={isDayTime ? [14, 22, 10] : [-10, 12, -8]}
+          intensity={isDayTime ? 1.35 : 0.4}
+          color={isDayTime ? '#fff4dc' : sceneData.theme === 'cyberpunk' ? '#ff55ff' : '#4488ff'}
           castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-far={100}
-          shadow-camera-left={-50}
-          shadow-camera-right={50}
-          shadow-camera-top={50}
-          shadow-camera-bottom={-50}
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+          shadow-camera-far={80}
+          shadow-camera-left={-40}
+          shadow-camera-right={40}
+          shadow-camera-top={40}
+          shadow-camera-bottom={-40}
+          shadow-bias={-0.0005}
         />
-        
-        {/* Theme-specific lighting */}
+
+        {/* Theme-specific fill lights */}
         {sceneData.theme === 'cyberpunk' && (
           <>
-            <pointLight position={[10, 5, 10]} intensity={2} color="#00ffff" distance={20} />
-            <pointLight position={[-10, 5, -10]} intensity={2} color="#ff00ff" distance={20} />
+            <pointLight position={[8, 4, 8]} intensity={2.5} color="#00ffff" distance={24} />
+            <pointLight position={[-8, 4, -8]} intensity={2.5} color="#ff00ff" distance={24} />
+            <pointLight position={[0, 6, 0]} intensity={1} color="#8800ff" distance={30} />
           </>
         )}
-        
         {sceneData.theme === 'horror' && (
-          <>
-            <pointLight position={[5, 2, 5]} intensity={1} color="#ff0000" distance={15} />
-            <spotLight
-              position={[0, 10, 0]}
-              angle={0.5}
-              penumbra={0.5}
-              intensity={0.5}
-              color="#ff3333"
-              castShadow
-            />
-          </>
+          <pointLight position={[0, 4, 0]} intensity={1.2} color="#ff3333" distance={18} />
         )}
-        
-        {/* Warm glow for buildings at night */}
-        {!isDayTime && sceneData.objects?.some(obj => obj.type === 'building') && (
-          <>
-            <pointLight position={[5, 3, 5]} intensity={0.8} color="#ffaa44" distance={15} />
-            <pointLight position={[-5, 3, -5]} intensity={0.6} color="#ffcc66" distance={12} />
-          </>
-        )}
-        
-        {/* Ground with enhanced material */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
-          <planeGeometry args={[200, 200]} />
-          <meshPhysicalMaterial 
-            color={
-              sceneData.theme === 'forest' || sceneData.theme === 'nature' ? '#2d4a2d' :
-              sceneData.theme === 'desert' ? '#c4a35a' :
-              sceneData.theme === 'horror' ? '#1a0f0f' :
-              sceneData.theme === 'cyberpunk' || sceneData.theme === 'scifi' ? '#1a1a2e' :
-              sceneData.theme === 'racing' ? '#333333' :
-              sceneData.theme === 'fantasy' ? '#4a3a2a' :
-              isDayTime ? '#3a5a3a' : '#1a1a2a'
-            }
-            roughness={0.9}
-            metalness={0.1}
-          />
-        </mesh>
-        
-        {/* Contact shadows for ambient occlusion feel */}
-        <ContactShadows
-          position={[0, -0.99, 0]}
-          opacity={0.6}
-          scale={50}
-          blur={2}
-          far={10}
-        />
-        
-        {/* Grid helper */}
-        <gridHelper 
-          args={[200, 50, isDayTime ? '#444444' : '#222244', isDayTime ? '#333333' : '#1a1a2a']} 
-          position={[0, -0.9, 0]} 
-        />
-        
-        {/* Particle Effects */}
-        <ParticleEffects theme={sceneData.theme} mood={sceneData.mood} isDayTime={isDayTime} />
-        
-        {/* Rain Effect */}
-        <RainEffect enabled={showRain} />
-        
-        {/* Heat Shimmer */}
-        <HeatShimmer enabled={showHeatShimmer} />
-        
-        {/* Scene Objects */}
-        {sceneData.objects?.map((obj, i) => (
-          <InteractiveObject 
-            key={i} 
-            obj={obj} 
-            index={i}
-            sfxFiles={sfxFiles}
-            theme={sceneData.theme}
-          />
+
+        {/* Ground + scatter */}
+        <Ground theme={sceneData.theme} palette={palette} />
+        {scatter.grass > 0 && <Scatter theme={sceneData.theme} count={scatter.grass} spread={45} kind="grass" />}
+        {scatter.rock > 0 && <Scatter theme={sceneData.theme} count={scatter.rock} spread={50} kind="rock" />}
+        {scatter.tree > 0 && <Scatter theme={sceneData.theme} count={scatter.tree} spread={55} kind="tree" />}
+
+        {/* Ambient mood particles (lightweight Sparkles) */}
+        <AmbientParticles theme={sceneData.theme} isDayTime={isDayTime} />
+
+        {/* Scene objects from the parser */}
+        {objects.map((obj, i) => (
+          <SceneObject key={i} obj={obj} theme={sceneData.theme} sfxFiles={sfxFiles} index={i} />
         ))}
-        
-        {/* Player with Camera Controller */}
-        <PlayerController cameraMode={cameraMode} theme={sceneData.theme} onMouseLockChange={setMouseLocked} />
-        
-        {/* Camera controller for orbit mode */}
+
+        {/* Player */}
+        <PlayerController
+          cameraMode={cameraMode}
+          theme={sceneData.theme}
+          onMouseLockChange={setMouseLocked}
+        />
+
         {cameraMode === 'orbit' && <OrbitCamera />}
-        
-        {/* Post-processing effects */}
-        <EffectComposer>
-          <Bloom 
-            intensity={sceneData.theme === 'cyberpunk' ? 1.5 : 0.3}
-            luminanceThreshold={0.3}
-            luminanceSmoothing={0.9}
-          />
-          <Vignette eskil={false} offset={0.1} darkness={sceneData.theme === 'horror' ? 0.8 : 0.4} />
-          <ToneMapping adaptive />
+
+        {/* Post-processing — tame, perf-friendly */}
+        <EffectComposer multisampling={0}>
+          <Bloom intensity={bloomIntensity} luminanceThreshold={0.6} luminanceSmoothing={0.85} mipmapBlur />
+          <Vignette eskil={false} offset={0.15} darkness={sceneData.theme === 'horror' ? 0.7 : 0.35} />
         </EffectComposer>
       </Canvas>
-      
-      {/* Click to Play overlay — outside Canvas so DOM renders correctly */}
+
+      {/* Click to Play — outside Canvas */}
       {!mouseLocked && cameraMode === 'follow' && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
           <div className="bg-black/80 backdrop-blur-md text-white px-8 py-6 rounded-2xl text-center border border-white/10 shadow-2xl">
             <p className="text-2xl font-bold mb-2">🎮 Click to Play</p>
-            <p className="text-sm text-slate-400">WASD to move • Mouse to look • Space to jump</p>
+            <p className="text-sm text-slate-400">WASD · Mouse to look · Space to jump</p>
           </div>
         </div>
       )}
 
-      {/* Enhanced HUD */}
+      {/* HUD */}
       <div
         className={`absolute top-2 sm:top-4 left-2 sm:left-4 transition-all duration-700 transform ${
           hudVisible ? 'translate-x-0 opacity-100' : '-translate-x-10 opacity-0'
         }`}
       >
         <div className="text-white font-mono text-xs sm:text-sm bg-black/80 backdrop-blur-md p-3 sm:p-5 rounded-lg sm:rounded-xl border border-white/10 shadow-2xl pointer-events-auto min-w-[160px] sm:min-w-[220px] max-w-[200px] sm:max-w-none">
-          {/* Scene Title */}
           <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
             <span className="text-lg sm:text-2xl">
               {sceneData.theme === 'forest' ? '🌲' :
                sceneData.theme === 'nature' ? '🌿' :
-               sceneData.theme === 'city' ? '🏙️' :
                sceneData.theme === 'desert' ? '🏜️' :
                sceneData.theme === 'cyberpunk' ? '🌃' :
                sceneData.theme === 'horror' ? '👻' :
@@ -559,89 +1063,47 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
                sceneData.theme === 'scifi' ? '🛸' :
                sceneData.theme === 'racing' ? '🏎️' :
                sceneData.theme === 'fantasy' ? '⚔️' :
-               sceneData.theme === 'adventure' ? '🗺️' :
-               sceneData.theme === 'underwater' ? '🐠' : '🎮'}
+               sceneData.theme === 'adventure' ? '🗺️' : '🎮'}
             </span>
             <div className="min-w-0">
               <div className="font-bold text-purple-400 text-sm sm:text-lg tracking-wide truncate">{sceneData.scene_name}</div>
               <div className="text-[10px] sm:text-xs text-slate-400">{sceneData.theme} • {sceneData.mood}</div>
             </div>
           </div>
-          
-          {/* Time indicator */}
+
           <div className="flex items-center gap-2 text-xs text-slate-300 mb-3">
             <span className="text-lg">{isDayTime ? '☀️' : '🌙'}</span>
             <span>{isDayTime ? 'Daytime' : 'Nighttime'}</span>
-            {sceneData.theme === 'cyberpunk' && <span className="text-cyan-400 ml-1">⚡ Neon Active</span>}
-            {sceneData.theme === 'horror' && <span className="text-red-400 ml-1">⚠️ Dark Zone</span>}
           </div>
-          
-          {/* Divider */}
+
           <div className="h-px bg-gradient-to-r from-purple-500/50 to-transparent mb-3" />
-          
-          {/* Controls info - Hidden on mobile, shown on larger screens */}
+
           <div className="hidden sm:block space-y-1.5 text-xs text-slate-400 mb-4">
-            <div className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">WASD</kbd>
-              <span>Move</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">Mouse</kbd>
-              <span>Look (click to lock)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">Space</kbd>
-              <span>Jump</span>
-            </div>
+            <div className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">WASD</kbd><span>Move</span></div>
+            <div className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">Mouse</kbd><span>Look (click to lock)</span></div>
+            <div className="flex items-center gap-2"><kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-[10px]">Space</kbd><span>Jump</span></div>
           </div>
-          
-          {/* Mobile controls hint */}
-          {isMobile && (
-            <div className="sm:hidden text-[10px] text-slate-400 mb-2">
-              <p>Tap to look • Use on-screen controls</p>
-            </div>
-          )}
-          
-          {/* Controls */}
+
           <div className="space-y-1.5 sm:space-y-2">
             <button
               onClick={() => setIsDayTime(!isDayTime)}
-              className="w-full text-[10px] sm:text-xs bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all transform hover:scale-[1.02] border border-white/5 flex items-center justify-center gap-1.5 sm:gap-2"
+              className="w-full text-[10px] sm:text-xs bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all border border-white/5 flex items-center justify-center gap-1.5 sm:gap-2"
             >
               {isDayTime ? '🌙 Night' : '☀️ Day'}
             </button>
             <button
               onClick={() => setCameraMode(cameraMode === 'follow' ? 'orbit' : 'follow')}
-              className="w-full text-[10px] sm:text-xs bg-gradient-to-r from-purple-700/80 to-indigo-700/80 hover:from-purple-600/80 hover:to-indigo-600/80 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all transform hover:scale-[1.02] border border-purple-500/20 flex items-center justify-center gap-1.5 sm:gap-2"
+              className="w-full text-[10px] sm:text-xs bg-gradient-to-r from-purple-700/80 to-indigo-700/80 hover:from-purple-600/80 hover:to-indigo-600/80 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all border border-purple-500/20 flex items-center justify-center gap-1.5 sm:gap-2"
             >
               {cameraMode === 'follow' ? '📷 Orbit' : '🎮 Follow'}
             </button>
           </div>
         </div>
       </div>
-      
-      {/* Compass / Mini-map - Hidden on mobile */}
-      <div 
-        className={`hidden sm:block absolute top-4 right-4 transition-all duration-700 delay-200 transform ${
-          hudVisible ? 'translate-x-0 opacity-100' : 'translate-x-10 opacity-0'
-        }`}
-      >
-        <div className="bg-black/80 backdrop-blur-md p-3 rounded-full border border-white/10 shadow-xl">
-          <div className="relative w-16 h-16">
-            <div className="absolute inset-0 rounded-full border-2 border-slate-600/50" />
-            <div className="absolute inset-2 rounded-full bg-gradient-to-br from-slate-800 to-slate-900" />
-            {/* Compass needle */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
-              <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[10px] border-l-transparent border-r-transparent border-b-red-500" />
-            </div>
-            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-slate-400 font-bold">N</div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Audio Track Display */}
-      {currentlyPlaying && (
-        <div 
+
+      {/* Music indicator */}
+      {musicFile && (
+        <div
           className={`absolute bottom-16 sm:bottom-20 left-2 sm:left-4 transition-all duration-700 delay-300 transform ${
             hudVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
           }`}
@@ -653,367 +1115,99 @@ export default function GameRenderer({ sceneData, audioFiles, skyboxUrl }: GameR
               <div className="w-1 h-2 bg-purple-300 animate-pulse delay-150" />
               <div className="w-1 h-5 bg-purple-400 animate-pulse delay-100" />
             </div>
-            <span className="text-[10px] sm:text-xs text-slate-300 truncate max-w-[120px] sm:max-w-none">♫ {currentlyPlaying}</span>
+            <span className="text-[10px] sm:text-xs text-slate-300 truncate max-w-[140px]">♫ ElevenLabs Music</span>
           </div>
         </div>
       )}
-      
+
       {/* Object count */}
-      <div 
+      <div
         className={`absolute bottom-4 left-1/2 -translate-x-1/2 transition-all duration-700 delay-400 transform ${
           hudVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
         }`}
       >
         <div className="flex items-center gap-2 sm:gap-4 text-white text-[10px] sm:text-xs bg-black/60 backdrop-blur-sm px-3 sm:px-5 py-2 sm:py-2.5 rounded-full border border-white/10">
           <span className="flex items-center gap-1.5">
-            <span className="text-purple-400 font-bold">{sceneData.objects?.length || 0}</span>
+            <span className="text-purple-400 font-bold">{objects.length}</span>
             <span className="text-slate-400">objects</span>
           </span>
           <span className="w-px h-3 bg-slate-600" />
-          <span className="text-slate-400">Click objects to interact</span>
-          {sceneData.theme === 'forest' && <span className="text-yellow-400 text-[10px]">✨ Fireflies active</span>}
-          {showRain && <span className="text-blue-400 text-[10px]">🌧️ Rain active</span>}
+          <span className="text-slate-400">Click objects for SFX</span>
         </div>
       </div>
-      
-      {/* Theme indicator */}
-      <div 
+
+      <div
         className={`absolute bottom-4 right-2 sm:right-4 transition-all duration-700 delay-500 transform ${
           hudVisible ? 'translate-x-0 opacity-100' : 'translate-x-10 opacity-0'
         }`}
       >
         <div className="text-[8px] sm:text-[10px] text-slate-500 font-mono">
-          SceneForge AI v1.0
+          SceneForge AI
         </div>
       </div>
-      
-      {/* Mobile touch controls overlay */}
-      {isMobile && (
-        <div className="absolute bottom-24 left-4 right-4 pointer-events-none sm:hidden">
-          <div className="flex justify-between items-end">
-            {/* D-pad hint */}
-            <div className="pointer-events-auto bg-black/60 backdrop-blur-sm p-2 rounded-lg border border-white/10">
-              <div className="grid grid-cols-3 gap-1 w-24">
-                <div></div>
-                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">↑</button>
-                <div></div>
-                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">←</button>
-                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">↓</button>
-                <button className="w-7 h-7 bg-slate-700/80 rounded flex items-center justify-center text-white text-xs">→</button>
-              </div>
-            </div>
-            {/* Action buttons */}
-            <div className="pointer-events-auto flex gap-2">
-              <button className="w-12 h-12 bg-purple-600/80 rounded-full flex items-center justify-center text-white text-xs font-bold">Jump</button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Background Audio — starts after pointer lock (user interaction) to satisfy autoplay policy */}
+
       {musicFile && (
-        <audio
-          ref={audioRef}
-          src={musicFile.url}
-          loop
-          className="hidden"
-        />
+        <audio ref={audioRef} src={musicFile.url} loop className="hidden" />
       )}
     </div>
   );
 }
 
-// Enhanced Interactive Object Component
-function InteractiveObject({ 
-  obj, 
-  index,
-  sfxFiles,
+// ──────────────────────────────────────────────────────────────────────────
+// Player — low-poly character, replaces the cube
+// ──────────────────────────────────────────────────────────────────────────
+
+function PlayerController({
+  cameraMode,
   theme,
-}: { 
-  obj: GameRendererProps['sceneData']['objects'][0];
-  index: number;
-  sfxFiles: Array<{ type: string; name: string; url: string }>;
+  onMouseLockChange,
+}: {
+  cameraMode: 'follow' | 'orbit';
   theme: string;
+  onMouseLockChange?: (locked: boolean) => void;
 }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [hovered, setHovered] = useState(false);
-  const [clicked, setClicked] = useState(false);
-  
-  const materialConfig = getMaterialConfig(obj.type, theme);
-  const hoverColor = '#ffffff';
-  
-  // Play sound on click
-  const handleClick = useCallback(() => {
-    setClicked(true);
-    setTimeout(() => setClicked(false), 200);
-    
-    // Play a random SFX if available
-    if (sfxFiles.length > 0) {
-      const randomSfx = sfxFiles[index % sfxFiles.length];
-      if (randomSfx?.url) {
-        const audio = new Audio(randomSfx.url);
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-      }
-    }
-  }, [sfxFiles, index]);
-  
-  // Animation on hover/click
-  useFrame((state) => {
-    if (!meshRef.current) return;
-    
-    if (hovered || clicked) {
-      meshRef.current.scale.setScalar(
-        obj.scale * (clicked ? 1.2 : 1.1)
-      );
-      meshRef.current.rotation.y += 0.02;
-    } else {
-      meshRef.current.scale.setScalar(obj.scale);
-    }
-  });
-  
-  // Enhanced geometry based on object type
-  const renderObject = () => {
-    switch (obj.type) {
-      case 'tree':
-        return (
-          <group position={obj.position}>
-            {/* Trunk */}
-            <mesh position={[0, 0.5, 0]} castShadow>
-              <cylinderGeometry args={[0.15, 0.2, 1, 8]} />
-              <meshPhysicalMaterial color="#4a3728" roughness={0.9} />
-            </mesh>
-            {/* Leaves - multiple cones for fuller look */}
-            <mesh position={[0, 1.5, 0]} castShadow>
-              <coneGeometry args={[0.8, 1.5, 8]} />
-              <meshPhysicalMaterial 
-                color={materialConfig.color} 
-                roughness={materialConfig.roughness}
-                metalness={materialConfig.metalness}
-              />
-            </mesh>
-            <mesh position={[0, 2.2, 0]} castShadow>
-              <coneGeometry args={[0.6, 1.2, 8]} />
-              <meshPhysicalMaterial 
-                color={materialConfig.color} 
-                roughness={materialConfig.roughness}
-                metalness={materialConfig.metalness}
-              />
-            </mesh>
-          </group>
-        );
-      case 'rock':
-        return (
-          <mesh position={obj.position} castShadow receiveShadow>
-            <dodecahedronGeometry args={[0.6, 0]} />
-            <meshPhysicalMaterial 
-              color={materialConfig.color}
-              roughness={materialConfig.roughness}
-              metalness={materialConfig.metalness}
-              ior={materialConfig.ior}
-            />
-          </mesh>
-        );
-      case 'building':
-        return (
-          <group position={obj.position}>
-            {/* Main building */}
-            <mesh position={[0, 0.75, 0]} castShadow>
-              <boxGeometry args={[1.2, 1.5, 1.2]} />
-              <meshPhysicalMaterial 
-                color={materialConfig.color}
-                roughness={materialConfig.roughness}
-                metalness={materialConfig.metalness}
-                emissive={materialConfig.emissive || '#000000'}
-                emissiveIntensity={materialConfig.emissiveIntensity || 0}
-              />
-            </mesh>
-            {/* Windows - emissive planes */}
-            <mesh position={[0, 1, 0.61]}>
-              <planeGeometry args={[0.6, 0.4]} />
-              <meshBasicMaterial 
-                color={theme === 'cyberpunk' ? '#00ffff' : '#ffee88'} 
-              />
-            </mesh>
-            <mesh position={[0, 0.4, 0.61]}>
-              <planeGeometry args={[0.6, 0.4]} />
-              <meshBasicMaterial 
-                color={theme === 'cyberpunk' ? '#00ffff' : '#ffee88'} 
-              />
-            </mesh>
-          </group>
-        );
-      case 'vehicle':
-        return (
-          <group position={obj.position}>
-            {/* Body */}
-            <mesh position={[0, 0.3, 0]} castShadow>
-              <boxGeometry args={[1.2, 0.5, 2]} />
-              <meshPhysicalMaterial 
-                color={materialConfig.color}
-                roughness={materialConfig.roughness}
-                metalness={materialConfig.metalness}
-                clearcoat={materialConfig.clearcoat}
-                clearcoatRoughness={materialConfig.clearcoatRoughness}
-                emissive={materialConfig.emissive}
-                emissiveIntensity={materialConfig.emissiveIntensity}
-              />
-            </mesh>
-            {/* Cabin */}
-            <mesh position={[0, 0.7, -0.2]} castShadow>
-              <boxGeometry args={[0.9, 0.4, 0.8]} />
-              <meshPhysicalMaterial 
-                color="#1a1a2e"
-                roughness={0.1}
-                metalness={0.9}
-              />
-            </mesh>
-            {/* Wheels */}
-            {[[-0.6, 0.2, 0.7] as [number, number, number], [0.6, 0.2, 0.7] as [number, number, number], [-0.6, 0.2, -0.7] as [number, number, number], [0.6, 0.2, -0.7] as [number, number, number]].map((pos, i) => (
-              <mesh key={i} position={pos} rotation={[0, 0, Math.PI / 2]} castShadow>
-                <cylinderGeometry args={[0.2, 0.2, 0.15, 16]} />
-                <meshStandardMaterial color="#1a1a1a" />
-              </mesh>
-            ))}
-          </group>
-        );
-      case 'character':
-        return (
-          <group position={obj.position}>
-            {/* Body */}
-            <mesh position={[0, 0.6, 0]} castShadow>
-              <capsuleGeometry args={[0.25, 0.8, 4, 8]} />
-              <meshPhysicalMaterial 
-                color={materialConfig.color}
-                roughness={materialConfig.roughness}
-                metalness={materialConfig.metalness}
-              />
-            </mesh>
-            {/* Head */}
-            <mesh position={[0, 1.3, 0]} castShadow>
-              <sphereGeometry args={[0.2, 16, 16]} />
-              <meshStandardMaterial color="#ffdbac" />
-            </mesh>
-            {/* Arms */}
-            <mesh position={[-0.35, 0.7, 0]} castShadow>
-              <capsuleGeometry args={[0.08, 0.5, 4, 8]} />
-              <meshPhysicalMaterial color={materialConfig.color} />
-            </mesh>
-            <mesh position={[0.35, 0.7, 0]} castShadow>
-              <capsuleGeometry args={[0.08, 0.5, 4, 8]} />
-              <meshPhysicalMaterial color={materialConfig.color} />
-            </mesh>
-          </group>
-        );
-      default:
-        return (
-          <mesh 
-            ref={meshRef}
-            position={obj.position}
-            castShadow
-            receiveShadow
-            onPointerOver={() => setHovered(true)}
-            onPointerOut={() => setHovered(false)}
-            onClick={handleClick}
-          >
-            <boxGeometry args={[obj.scale, obj.scale, obj.scale]} />
-            <meshPhysicalMaterial 
-              color={hovered || clicked ? hoverColor : materialConfig.color}
-              emissive={clicked ? materialConfig.color : '#000000'}
-              emissiveIntensity={clicked ? 0.5 : 0}
-              roughness={materialConfig.roughness}
-              metalness={materialConfig.metalness}
-            />
-          </mesh>
-        );
-    }
-  };
-
-  // For grouped objects (tree, building, vehicle, character), wrap with Float and interaction handlers
-  if (['tree', 'building', 'vehicle', 'character'].includes(obj.type)) {
-    return (
-      <Float
-        speed={2}
-        rotationIntensity={hovered ? 0.3 : 0.1}
-        floatIntensity={hovered ? 0.5 : 0.2}
-      >
-        <group
-          onPointerOver={() => setHovered(true)}
-          onPointerOut={() => setHovered(false)}
-          onClick={handleClick}
-        >
-          {renderObject()}
-        </group>
-        {clicked && (
-          <pointLight
-            position={[obj.position[0], obj.position[1] + 2, obj.position[2]]}
-            intensity={2}
-            color={materialConfig.color}
-            distance={5}
-            decay={2}
-          />
-        )}
-      </Float>
-    );
-  }
-
-  return renderObject();
-}
-
-// Enhanced Player Controller Component
-function PlayerController({ cameraMode, theme, onMouseLockChange }: { cameraMode: 'follow' | 'orbit'; theme: string; onMouseLockChange?: (locked: boolean) => void }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
+  const bobRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
-  const [keys, setKeys] = useState<Set<string>>(new Set());
-  const [velocity, setVelocity] = useState(new THREE.Vector3());
-  const [isJumping, setIsJumping] = useState(false);
-  
-  // Mouse look
-  const [mouseLocked, setMouseLocked] = useState(false);
-  const [rotation, setRotation] = useState({ x: 0, y: 0 });
-  
+  const keysRef = useRef<Set<string>>(new Set());
+  const velocityRef = useRef(new THREE.Vector3());
+  const isJumpingRef = useRef(false);
+  const rotationRef = useRef({ x: 0, y: 0 });
+  const mouseLockedRef = useRef(false);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      setKeys(prev => new Set([...Array.from(prev), e.key.toLowerCase()]));
-      if (e.code === 'Space' && !isJumping) {
-        setIsJumping(true);
-        setVelocity(v => new THREE.Vector3(v.x, 0.3, v.z));
+      keysRef.current.add(e.key.toLowerCase());
+      if (e.code === 'Space' && !isJumpingRef.current) {
+        isJumpingRef.current = true;
+        velocityRef.current.y = 0.32;
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      setKeys(prev => {
-        const next = new Set(prev);
-        next.delete(e.key.toLowerCase());
-        return next;
-      });
+      keysRef.current.delete(e.key.toLowerCase());
     };
-    
     const handleMouseMove = (e: MouseEvent) => {
-      if (!mouseLocked) return;
-      setRotation(prev => ({
-        x: Math.max(-Math.PI / 2, Math.min(Math.PI / 2, prev.x - e.movementY * 0.002)),
-        y: prev.y - e.movementX * 0.002,
-      }));
+      if (!mouseLockedRef.current) return;
+      rotationRef.current.x = Math.max(
+        -Math.PI / 2,
+        Math.min(Math.PI / 2, rotationRef.current.x - e.movementY * 0.002)
+      );
+      rotationRef.current.y -= e.movementX * 0.002;
     };
-    
     const handleClick = () => {
-      if (!mouseLocked) {
-        document.body.requestPointerLock();
-      }
+      if (!mouseLockedRef.current) document.body.requestPointerLock();
     };
-    
     const handlePointerLockChange = () => {
       const locked = document.pointerLockElement === document.body;
-      setMouseLocked(locked);
+      mouseLockedRef.current = locked;
       onMouseLockChange?.(locked);
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('click', handleClick);
     document.addEventListener('pointerlockchange', handlePointerLockChange);
-    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -1021,107 +1215,130 @@ function PlayerController({ cameraMode, theme, onMouseLockChange }: { cameraMode
       window.removeEventListener('click', handleClick);
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
     };
-  }, [mouseLocked, isJumping]);
-  
-  useFrame(() => {
-    if (!meshRef.current) return;
-    
-    const speed = 0.15;
-    const direction = new THREE.Vector3();
-    
-    // Movement relative to camera rotation
-    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      rotation.y
-    );
-    const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      rotation.y
-    );
-    
-    if (keys.has('w') || keys.has('arrowup')) direction.add(forward);
-    if (keys.has('s') || keys.has('arrowdown')) direction.sub(forward);
-    if (keys.has('a') || keys.has('arrowleft')) direction.sub(right);
-    if (keys.has('d') || keys.has('arrowright')) direction.add(right);
-    
-    direction.normalize().multiplyScalar(speed);
-    
-    // Apply gravity
-    let newVelocity = velocity.clone();
-    if (meshRef.current.position.y > 0 || velocity.y > 0) {
-      newVelocity.y -= 0.015; // Gravity
+  }, [onMouseLockChange]);
+
+  useFrame((state, delta) => {
+    const group = groupRef.current;
+    if (!group) return;
+
+    const speed = 7.5 * delta; // scale by delta for FPS independence
+    const dir = new THREE.Vector3();
+    const ry = rotationRef.current.y;
+    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
+    const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
+
+    const keys = keysRef.current;
+    if (keys.has('w') || keys.has('arrowup')) dir.add(forward);
+    if (keys.has('s') || keys.has('arrowdown')) dir.sub(forward);
+    if (keys.has('a') || keys.has('arrowleft')) dir.sub(right);
+    if (keys.has('d') || keys.has('arrowright')) dir.add(right);
+
+    if (dir.lengthSq() > 0) dir.normalize().multiplyScalar(speed);
+
+    // gravity
+    const v = velocityRef.current;
+    if (group.position.y > 0 || v.y > 0) {
+      v.y -= 0.9 * delta;
     } else {
-      newVelocity.y = 0;
-      setIsJumping(false);
-      meshRef.current.position.y = 0;
+      v.y = 0;
+      isJumpingRef.current = false;
+      group.position.y = 0;
     }
-    
-    // Apply movement
-    meshRef.current.position.x += direction.x;
-    meshRef.current.position.z += direction.z;
-    meshRef.current.position.y += newVelocity.y;
-    
-    if (newVelocity.y !== velocity.y) {
-      setVelocity(newVelocity);
+
+    group.position.x += dir.x;
+    group.position.z += dir.z;
+    group.position.y += v.y;
+
+    // face travel direction
+    if (dir.lengthSq() > 0) {
+      const targetAngle = Math.atan2(dir.x, dir.z);
+      const cur = group.rotation.y;
+      const diff = ((targetAngle - cur + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      group.rotation.y = cur + diff * 0.18;
     }
-    
-    // Update camera in follow mode
+
+    // walking bob
+    if (bobRef.current) {
+      const moving = dir.lengthSq() > 0 ? 1 : 0;
+      bobRef.current.position.y = moving ? Math.abs(Math.sin(state.clock.elapsedTime * 10)) * 0.08 : 0;
+    }
+
     if (cameraMode === 'follow') {
-      const cameraOffset = new THREE.Vector3(0, 5, 10);
-      cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotation.y);
-      camera.position.copy(meshRef.current.position).add(cameraOffset);
-      
-      // Apply camera rotation for look
-      const lookTarget = meshRef.current.position.clone();
-      lookTarget.y += 1;
-      camera.lookAt(lookTarget);
+      const offset = new THREE.Vector3(0, 4.5, 8).applyAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        rotationRef.current.y
+      );
+      camera.position.lerp(group.position.clone().add(offset), 0.18);
+      const look = group.position.clone();
+      look.y += 1.2;
+      camera.lookAt(look);
     }
   });
 
-  const playerColor = theme === 'cyberpunk' ? '#00ffff' : theme === 'horror' ? '#ff4444' : '#6366f1';
+  const body =
+    theme === 'cyberpunk' ? '#9f00ff' :
+    theme === 'horror' ? '#4a1a1a' :
+    theme === 'scifi' ? '#ff9c6b' :
+    theme === 'racing' ? '#e63946' :
+    theme === 'fantasy' ? '#4f8fe5' :
+    '#3a6fe8';
 
   return (
     <>
-      <mesh ref={meshRef} position={[0, 0.5, 0]} castShadow>
-        <boxGeometry args={[0.8, 0.8, 0.8]} />
-        <meshPhysicalMaterial
-          color={playerColor}
-          emissive={playerColor}
-          emissiveIntensity={0.3}
-          roughness={0.3}
-          metalness={0.7}
-        />
-      </mesh>
-      
-      {/* Spotlight following player */}
-      <spotLight
-        position={[meshRef.current?.position.x || 0, 10, meshRef.current?.position.z || 0]}
-        target={meshRef.current || undefined}
-        angle={0.5}
-        penumbra={0.5}
-        intensity={0.8}
-        color="#ffffff"
-        distance={20}
-        castShadow
-      />
-      
+      <group ref={groupRef} position={[0, 0, 0]}>
+        <group ref={bobRef}>
+          {/* torso */}
+          <mesh position={[0, 0.85, 0]} castShadow>
+            <capsuleGeometry args={[0.28, 0.7, 6, 12]} />
+            <meshStandardMaterial color={body} roughness={0.5} metalness={0.1} />
+          </mesh>
+          {/* chest accent */}
+          <mesh position={[0, 0.9, 0.23]}>
+            <boxGeometry args={[0.25, 0.3, 0.04]} />
+            <meshStandardMaterial color="#ffffff" emissive={body} emissiveIntensity={0.3} />
+          </mesh>
+          {/* head */}
+          <mesh position={[0, 1.55, 0]} castShadow>
+            <sphereGeometry args={[0.24, 16, 12]} />
+            <meshStandardMaterial color="#f5c8a8" roughness={0.6} />
+          </mesh>
+          {/* visor / eyes */}
+          <mesh position={[0, 1.58, 0.22]}>
+            <boxGeometry args={[0.28, 0.08, 0.02]} />
+            <meshStandardMaterial color="#141418" emissive="#88ccff" emissiveIntensity={0.5} />
+          </mesh>
+          {/* arms */}
+          {[-0.4, 0.4].map((x) => (
+            <mesh key={x} position={[x, 0.85, 0]} castShadow>
+              <capsuleGeometry args={[0.1, 0.45, 4, 10]} />
+              <meshStandardMaterial color={body} />
+            </mesh>
+          ))}
+          {/* legs */}
+          {[-0.14, 0.14].map((x) => (
+            <mesh key={x} position={[x, 0.28, 0]} castShadow>
+              <capsuleGeometry args={[0.12, 0.4, 4, 10]} />
+              <meshStandardMaterial color="#1a1a24" />
+            </mesh>
+          ))}
+        </group>
+      </group>
+      {/* soft player light */}
+      <pointLight position={[0, 2.5, 0]} intensity={0.25} color="#ffffff" distance={5} />
     </>
   );
 }
 
-// Orbit Camera Component
 function OrbitCamera() {
   const { camera } = useThree();
-  const [rotation, setRotation] = useState(0);
-  
+  const rotRef = useRef(0);
   useFrame(() => {
-    setRotation(r => r + 0.005);
-    const radius = 20;
-    camera.position.x = Math.sin(rotation) * radius;
-    camera.position.z = Math.cos(rotation) * radius;
-    camera.position.y = 10 + Math.sin(rotation * 0.5) * 2;
+    rotRef.current += 0.004;
+    const r = 22;
+    camera.position.x = Math.sin(rotRef.current) * r;
+    camera.position.z = Math.cos(rotRef.current) * r;
+    camera.position.y = 10 + Math.sin(rotRef.current * 0.5) * 2;
     camera.lookAt(0, 2, 0);
   });
-  
   return null;
 }
