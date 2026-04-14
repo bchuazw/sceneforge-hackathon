@@ -130,7 +130,13 @@ export default function Home() {
             <div className="space-y-2 text-sm">
               <p><span className="text-slate-400">Scene:</span> {result.sceneData?.scene_name}</p>
               <p><span className="text-slate-400">Theme:</span> {result.sceneData?.theme} • {result.sceneData?.mood}</p>
-              <p><span className="text-slate-400">Audio Files:</span> {result.generated.audioFiles}</p>
+              <p>
+                <span className="text-slate-400">Audio Files:</span>{' '}
+                {result.generated.audioFiles}
+                {result.generated.audioStatus === 'quota_exceeded' && (
+                  <span className="ml-2 text-yellow-400 text-xs">⚠ ElevenLabs quota exhausted</span>
+                )}
+              </p>
               <p><span className="text-slate-400">Similar Scenes Found:</span> {result.generated.similarScenesFound}</p>
               <p><span className="text-slate-400">Skybox:</span> {result.generated.skybox ? '✓' : '✗'}</p>
             </div>

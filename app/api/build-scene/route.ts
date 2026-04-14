@@ -130,6 +130,13 @@ export async function POST(req: Request) {
       tpSaved = false;
     }
     
+    const audioStatus = audioFiles?.some((a: any) => a.status === 'quota_exceeded')
+      ? 'quota_exceeded'
+      : audioFiles?.every((a: any) => a.status === 'generated')
+      ? 'generated'
+      : audioFiles?.length ? 'partial'
+      : 'none';
+
     return NextResponse.json({
       success: true,
       sceneId,
@@ -138,6 +145,7 @@ export async function POST(req: Request) {
       persisted: tpSaved,
       generated: {
         audioFiles: audioFiles?.length || 0,
+        audioStatus,
         similarScenesFound: similarScenes?.length || 0,
         skybox: !!skyboxUrl,
         narration: !!narrationUrl,

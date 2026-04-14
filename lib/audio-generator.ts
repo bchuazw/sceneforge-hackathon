@@ -90,7 +90,15 @@ export async function generateAudioForScene(
         musicGenerated = true;
       } else {
         const errText = await musicResponse.text();
-        console.error('ElevenLabs Music API error, falling back to sound-generation:', errText);
+        const isQuota = errText.includes('quota_exceeded');
+        console.error(`ElevenLabs Music API error (${isQuota ? 'QUOTA EXCEEDED' : musicResponse.status}):`, errText);
+        if (isQuota) {
+          // Hard stop — no point trying fallback if quota is exhausted
+          console.warn('ElevenLabs quota exhausted. Skipping audio generation entirely.');
+          await writeFile(path.join(process.cwd(), 'public/generated', musicFilename), Buffer.from([0xFF, 0xFB, 0x90, 0x00]));
+          audioFiles.push({ type: 'music', name: 'Background Music', url: `/api/files/${musicFilename}`, status: 'quota_exceeded' });
+          return audioFiles;
+        }
       }
     } catch (error) {
       console.error('Music API fetch error, falling back to sound-generation:', error);
@@ -181,7 +189,7 @@ export async function generateAudioForScene(
             path.join(process.cwd(), 'public/generated', sfxFilename),
             sfxBuffer
           );
-          
+
           audioFiles.push({
             type: 'sfx',
             name: zone.sound || `Sound ${i + 1}`,
@@ -190,7 +198,12 @@ export async function generateAudioForScene(
             status: 'generated',
           });
         } else {
-          throw new Error(`SFX generation failed: ${await sfxResponse.text()}`);
+          const errText = await sfxResponse.text();
+          if (errText.includes('quota_exceeded')) {
+            console.warn('ElevenLabs quota exhausted during SFX generation, stopping.');
+            break; // Stop SFX loop — no point trying more
+          }
+          throw new Error(`SFX generation failed: ${errText}`);
         }
       } catch (error) {
         console.error(`SFX generation error for zone ${i}:`, error);
