@@ -95,12 +95,8 @@ Schema:
         break;
       } catch (err: any) {
         lastErr = err;
-        const msg = err?.message || '';
-        // Only keep trying on "model not found / unauthorized" type errors.
-        if (!/model|not.*found|does.?not.?exist|unsupported|unknown|invalid|permission|access/i.test(msg)) {
-          throw err;
-        }
-        console.warn(`parseSceneDescription: model ${model} unavailable (${msg.slice(0, 100)}), falling back`);
+        const msg = err?.message || String(err);
+        console.warn(`parseSceneDescription: model ${model} failed (${msg.slice(0, 160)}), trying next candidate`);
       }
     }
     if (!response) throw lastErr || new Error('No model available');
