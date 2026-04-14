@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import './globals.css';
 
 // Use production URL as default, fallback to localhost for dev
 const BASE_URL = process.env.NEXT_PUBLIC_URL || 'https://sceneforge-hackathon.onrender.com';
