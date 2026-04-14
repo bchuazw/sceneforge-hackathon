@@ -96,6 +96,8 @@ function resolveSubtype(obj: GameObject): string {
   // Antennas, spectators, cones etc. — map to sensible stand-ins before fallback.
   if (/antenna|satellite|dish/.test(combined)) return 'lamp_post';
   if (/cone|pylon/.test(combined)) return 'barrel';
+  if (/checkpoint|finish.?line|start.?line/.test(combined)) return 'flag';
+  if (/wall|barrier|guard.?rail/.test(combined)) return 'fence';
   if (/crowd|spectator|fan/.test(combined)) return 'character';
   if (/mushroom|fungus|toadstool/.test(combined)) return 'mushroom';
   if (/crystal|shard|gem/.test(combined)) return 'crystal';
